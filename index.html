@@ -153,6 +153,44 @@
 
   .date-picker button:hover { opacity: 0.9; }
 
+  .compare-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 0 24px 8px 280px;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border-color);
+  }
+  .compare-bar label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .compare-bar input[type="date"] {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .compare-btn {
+    background: rgba(139,146,165,0.15);
+    color: #8b92a5;
+    border: 1px solid rgba(139,146,165,0.25);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .compare-btn:hover, .compare-btn.active {
+    background: rgba(59,130,246,0.2);
+    color: #60a5fa;
+    border-color: rgba(59,130,246,0.4);
+  }
+
   /* Content Area */
   .content {
     display: flex;
@@ -530,6 +568,20 @@
     </div>
   </div>
 
+  <!-- Compare Bar -->
+  <div class="compare-bar" id="compareBar">
+    <label>Compare to:</label>
+    <input type="date" id="compareStartDate">
+    <span style="color:var(--text-muted);font-size:12px;">—</span>
+    <input type="date" id="compareEndDate">
+    <button class="compare-btn" onclick="applyComparison()">Apply</button>
+    <span style="color:var(--text-muted);font-size:11px;margin:0 4px;">|</span>
+    <button class="compare-btn" onclick="quickCompare('prev')">Previous Period</button>
+    <button class="compare-btn" onclick="quickCompare('yoy')">Same Period Last Year</button>
+    <button class="compare-btn" onclick="quickCompare('lastMonth')">Last Month</button>
+    <button class="compare-btn" onclick="clearComparison()" style="color:#e74c5e;border-color:rgba(231,76,94,0.3);">Clear</button>
+  </div>
+
   <!-- Page Content -->
   <div class="content">
     <div class="content-main" id="contentMain">
@@ -823,6 +875,7 @@
 
       <!-- ========== PAGE: REVENUE OVERVIEW ========== -->
       <div class="dashboard-page" id="page-rev-overview" style="display:none;">
+      <div class="page-header-row"><button class="export-btn" onclick="exportRevenueOverview()">Export CSV</button></div>
 
         <!-- Total Revenue -->
         <div class="section-header">Total Revenue</div>
@@ -908,6 +961,7 @@
       <!-- Coaching Revenue Page -->
       <!-- ======================== -->
       <div class="dashboard-page" id="page-coaching-rev" style="display:none;">
+      <div class="page-header-row"><button class="export-btn" onclick="exportCoachingRevenue()">Export CSV</button></div>
 
         <!-- Filter Dropdowns -->
         <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px;">
@@ -2123,6 +2177,8 @@ const SPREADSHEET_ID = '1iPlglpvlhIGx6tOGgLCzbQj7M-PNMynadF9svQhMAUM';
 // State
 // ====================
 let startDate, endDate;
+let compareStartDate = null, compareEndDate = null;
+let compareActive = false;
 let appData = [], callData = [], salesData = [], notesData = [];
 let chartInstances = {};
 let _currentPage = 'mtd-overview';
@@ -2252,6 +2308,126 @@ function applyDateFilter() {
     endDate = new Date(e + 'T23:59:59');
     computeAndRender();
   }
+}
+
+// ====================
+// Comparison Period Functions
+// ====================
+function applyComparison() {
+  const s = document.getElementById('compareStartDate').value;
+  const e = document.getElementById('compareEndDate').value;
+  if (s && e) {
+    compareStartDate = new Date(s + 'T00:00:00');
+    compareEndDate = new Date(e + 'T23:59:59');
+    compareActive = true;
+    document.querySelectorAll('.compare-btn').forEach(b => b.classList.remove('active'));
+    computeAndRender();
+  }
+}
+
+function quickCompare(mode) {
+  const periodMs = endDate - startDate;
+  if (mode === 'prev') {
+    compareEndDate = new Date(startDate.getTime() - 86400000); // day before current start
+    compareEndDate.setHours(23,59,59,999);
+    compareStartDate = new Date(compareEndDate.getTime() - periodMs);
+    compareStartDate.setHours(0,0,0,0);
+  } else if (mode === 'yoy') {
+    compareStartDate = new Date(startDate);
+    compareStartDate.setFullYear(compareStartDate.getFullYear() - 1);
+    compareEndDate = new Date(endDate);
+    compareEndDate.setFullYear(compareEndDate.getFullYear() - 1);
+  } else if (mode === 'lastMonth') {
+    const d = new Date(startDate);
+    d.setMonth(d.getMonth() - 1);
+    compareStartDate = new Date(d.getFullYear(), d.getMonth(), 1);
+    compareEndDate = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+  }
+  compareActive = true;
+  document.getElementById('compareStartDate').value = formatDateInput(compareStartDate);
+  document.getElementById('compareEndDate').value = formatDateInput(compareEndDate);
+  // Highlight active button
+  document.querySelectorAll('.compare-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  computeAndRender();
+}
+
+function clearComparison() {
+  compareActive = false;
+  compareStartDate = null;
+  compareEndDate = null;
+  document.getElementById('compareStartDate').value = '';
+  document.getElementById('compareEndDate').value = '';
+  document.querySelectorAll('.compare-btn').forEach(b => b.classList.remove('active'));
+  clearAllDeltas();
+  computeAndRender();
+}
+
+function filterByCompareDate(data, dateFields) {
+  if (!compareActive || !compareStartDate || !compareEndDate) return [];
+  return data.filter(row => {
+    const d = getDateField(row, dateFields);
+    if (!d) return false;
+    return d >= compareStartDate && d <= compareEndDate;
+  });
+}
+
+// showDelta: displays comparison delta on a scorecard.
+// valueId = the ID of the scorecard-value element (e.g. 'revGross')
+// If a matching change element doesn't exist, it auto-creates one.
+// isMoney hint: pass true for dollar values, false for counts. Auto-detected if omitted.
+function showDelta(valueId, currentVal, compareVal, isPercent, invertColor, isMoney) {
+  const changeId = valueId + 'Change';
+  let el = document.getElementById(changeId);
+  if (!el) {
+    const valueEl = document.getElementById(valueId);
+    if (!valueEl) return;
+    el = document.createElement('div');
+    el.id = changeId;
+    el.className = 'scorecard-change neutral';
+    valueEl.parentNode.appendChild(el);
+  }
+  if (!compareActive) { el.textContent = ''; el.className = 'scorecard-change neutral'; return; }
+  if (compareVal === 0 && currentVal === 0) { el.textContent = 'vs —'; el.className = 'scorecard-change neutral'; return; }
+
+  let delta, deltaText;
+  if (isPercent) {
+    delta = currentVal - compareVal;
+    deltaText = (delta >= 0 ? '+' : '') + delta.toFixed(1) + 'pp';
+  } else if (compareVal === 0) {
+    deltaText = '+100%';
+    delta = currentVal > 0 ? 1 : 0;
+  } else {
+    delta = (currentVal - compareVal) / Math.abs(compareVal);
+    deltaText = (delta >= 0 ? '+' : '') + (delta * 100).toFixed(1) + '%';
+  }
+
+  // Format the comparison value for display
+  // Auto-detect money if the scorecard value element starts with $
+  let compLabel;
+  if (isPercent) {
+    compLabel = compareVal.toFixed(1) + '%';
+  } else {
+    const autoMoney = isMoney !== undefined ? isMoney : (document.getElementById(valueId)?.textContent||'').trim().startsWith('$');
+    if (autoMoney) {
+      compLabel = (compareVal < 0 ? '-' : '') + '$' + Math.abs(compareVal).toLocaleString(undefined, {maximumFractionDigits:0});
+    } else {
+      compLabel = Math.round(compareVal).toLocaleString();
+    }
+  }
+
+  const isPositive = delta > 0;
+  const colorClass = invertColor ? (isPositive ? 'down' : 'up') : (isPositive ? 'up' : 'down');
+  el.innerHTML = '<span style="color:var(--text-muted);font-size:10px;">vs ' + compLabel + '</span> <span>' + deltaText + '</span>';
+  el.className = 'scorecard-change ' + (delta === 0 ? 'neutral' : colorClass);
+}
+
+// Clear all auto-created deltas when comparison is off
+function clearAllDeltas() {
+  document.querySelectorAll('.scorecard-change').forEach(el => {
+    el.textContent = '';
+    el.className = 'scorecard-change neutral';
+  });
 }
 
 // ====================
@@ -2776,6 +2952,51 @@ function exportCallTypePerf(callType) {
   downloadCSV(callType + '_Call_Performance_' + getDateRangeLabel() + '.csv', buildCSV(headers, rows));
 }
 
+function exportRevenueOverview() {
+  if (!salesData) { alert('Data not loaded yet'); return; }
+  const sales = filterByDate(salesData, ['Date']);
+  function calcRevMetrics(rows) {
+    let gross=0, refunds=0, newPif=0, paymentPlans=0, deposit=0;
+    rows.forEach(r => {
+      const amt = parseFloat(r['Amount'])||0;
+      const tt = (r['Transaction Type']||'').toLowerCase();
+      if (tt.includes('refund')) { refunds += amt; }
+      else { gross += amt; if (tt.includes('new pif')) newPif += amt; else if (tt.includes('payment plan')) paymentPlans += amt; else if (tt.includes('nonpif')||tt.includes('non pif')||tt.includes('non-pif')) deposit += amt; }
+    });
+    return { gross, refunds, net: gross+refunds, newPif, paymentPlans, deposit };
+  }
+  const coaching = sales.filter(r => (r['Product Sold']||'').toLowerCase().includes('coaching'));
+  const downsell = sales.filter(r => (r['Product Sold']||'').toLowerCase().includes('downsell'));
+  const lto = sales.filter(r => (r['Product Sold']||'').toLowerCase().includes('lto'));
+  const totalM = calcRevMetrics(sales);
+  const coachM = calcRevMetrics(coaching);
+  const dsM = calcRevMetrics(downsell);
+  const ltoM = calcRevMetrics(lto);
+  const uniqueEmails = new Set(); sales.forEach(r => { const e = (r['Email']||'').toLowerCase(); if (e) uniqueEmails.add(e); });
+  const ltv = uniqueEmails.size > 0 ? totalM.net / uniqueEmails.size : 0;
+
+  const headers = ['Category','Gross Revenue','Refunds','Net Revenue','New PIF','Payment Plans','Deposits','LTV'];
+  const rows = [
+    ['Total', totalM.gross.toFixed(2), totalM.refunds.toFixed(2), totalM.net.toFixed(2), totalM.newPif.toFixed(2), totalM.paymentPlans.toFixed(2), totalM.deposit.toFixed(2), ltv.toFixed(2)],
+    ['Coaching', coachM.gross.toFixed(2), coachM.refunds.toFixed(2), coachM.net.toFixed(2), coachM.newPif.toFixed(2), coachM.paymentPlans.toFixed(2), coachM.deposit.toFixed(2), ''],
+    ['Downsell', dsM.gross.toFixed(2), dsM.refunds.toFixed(2), dsM.net.toFixed(2), dsM.newPif.toFixed(2), dsM.paymentPlans.toFixed(2), dsM.deposit.toFixed(2), ''],
+    ['LTO', ltoM.gross.toFixed(2), ltoM.refunds.toFixed(2), ltoM.net.toFixed(2), ltoM.newPif.toFixed(2), ltoM.paymentPlans.toFixed(2), '', ''],
+  ];
+  downloadCSV('Revenue_Overview_' + getDateRangeLabel() + '.csv', buildCSV(headers, rows));
+}
+
+function exportCoachingRevenue() {
+  if (!salesData) { alert('Data not loaded yet'); return; }
+  const sales = filterByDate(salesData, ['Date']).filter(r => (r['Product Sold']||'').toLowerCase().includes('coaching'));
+  const headers = ['Date','Email','Amount','Amount Contracted','Transaction Type','Channel','Platform','Funnel','Location','Setter','Closer','Payment Method'];
+  const rows = sales.map(r => [
+    r['Date']||'', r['Email']||'', r['Amount']||'', r['Amount Contracted']||'',
+    r['Transaction Type']||'', r['Channel']||'', r['Platform']||'', r['Funnel']||'',
+    r['Location']||'', r['Setter']||'', r['Closer']||'', r['Payment Method']||''
+  ]);
+  downloadCSV('Coaching_Revenue_' + getDateRangeLabel() + '.csv', buildCSV(headers, rows));
+}
+
 // ====================
 // Computations — using verified exact field names
 // ====================
@@ -3010,6 +3231,49 @@ function computeAndRender() {
   updateTargets();
   renderTargetRequirements();
   renderBottleneckAnalysis();
+
+  // === COMPARISON DELTAS (MTD Overview) ===
+  if (compareActive) {
+    const cApps = filterByCompareDate(appData, ['Date Submitted']);
+    const cCalls = filterByCompareDate(callData, ['Date Created']);
+    const cSales = filterByCompareDate(salesData, ['Date']);
+    const cToday = new Date(); cToday.setHours(23,59,59,999);
+    const cPastCalls = cCalls.filter(r => { const d = getDateField(r,['Date Scheduled']); return !d || d <= cToday; });
+
+    const cUniqueEmails = new Set(); cApps.forEach(r => { const e = r['Email']; if(e) cUniqueEmails.add(e.toString().toLowerCase()); });
+    const cTriageCalls = cCalls.filter(r => (r['Call Type']||'').toLowerCase().includes('triage'));
+    const cSalesCalls = cCalls.filter(r => { const ct = r['Call Type']||''; return ct.includes('1C Sales')||ct.includes('2C Sales'); });
+    const cBookedTriage = countBookedUnique(cTriageCalls, 'Triage Status');
+    const cBookedSales = countBookedUnique(cSalesCalls, 'Sales Call Status');
+    const cTotalRev = cSales.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
+    const cHq = cApps.filter(r => (r['Result Tag']||'').toUpperCase().includes('HQ')).length;
+    const cLq = cApps.filter(r => (r['Result Tag']||'').toUpperCase().includes('LQ')).length;
+
+    const cPastTriage = cPastCalls.filter(r => (r['Call Type']||'').toLowerCase().includes('triage'));
+    const cPastSales = cPastCalls.filter(r => { const ct = r['Call Type']||''; return ct.includes('1C Sales')||ct.includes('2C Sales'); });
+    const cTriageWithSt = cPastTriage.filter(r => r['Triage Status']);
+    const cTriageShowed = cTriageWithSt.filter(r => didShow(r['Triage Status']));
+    const cTriageShowRate = cTriageWithSt.length > 0 ? cTriageShowed.length/cTriageWithSt.length*100 : 0;
+    const cSalesWithSt = cPastSales.filter(r => r['Sales Call Status']);
+    const cSalesShowed = cSalesWithSt.filter(r => didShow(r['Sales Call Status']));
+    const cSalesShowRate = cSalesWithSt.length > 0 ? cSalesShowed.length/cSalesWithSt.length*100 : 0;
+    const cClosed = cSalesShowed.filter(r => (r['Sales Call Status']||'').toLowerCase() === 'showed c');
+    const cCloseRate = cSalesShowed.length > 0 ? cClosed.length/cSalesShowed.length*100 : 0;
+
+    const cHtds = cSales.filter(r => { const ps = (r['Product Sold']||'').toLowerCase(); return !ps.includes('lto'); }).filter(r => { const tt = (r['Transaction Type']||'').toLowerCase(); return !tt.includes('refund'); });
+    const cHtdsAov = cHtds.length > 0 ? cHtds.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0) / cHtds.length : 0;
+
+    showDelta('uniqueApps', uniqueAppCount, cUniqueEmails.size);
+    showDelta('bookedTriage', bookedTriageCount, cBookedTriage);
+    showDelta('bookedSales', bookedSalesCount, cBookedSales);
+    showDelta('mtdNetRev', totalRev, cTotalRev);
+    showDelta('hqLeads', hqLeads, cHq);
+    showDelta('lqLeads', lqLeads, cLq);
+    showDelta('triageShowRate', triageShowRate, cTriageShowRate, true);
+    showDelta('salesShowRate', salesShowRate, cSalesShowRate, true);
+    showDelta('closeRate', closeRate, cCloseRate, true);
+    showDelta('htdsAov', htdsAov, cHtdsAov);
+  }
 
   // Charts
   renderAppPlatformChart(apps);
@@ -3912,6 +4176,24 @@ function renderRevenueOverview() {
   document.getElementById('ltoNew').textContent = fmt(ltoM.newPif);
   document.getElementById('ltoPlans').textContent = fmt(ltoM.paymentPlans);
 
+  // === COMPARISON DELTAS ===
+  if (compareActive) {
+    const cSales = filterByCompareDate(salesData, ['Date']);
+    function cCalc(rows) {
+      let gross=0,refunds=0,newPif=0,pp=0,dep=0;
+      rows.forEach(r=>{const a=parseFloat(r['Amount'])||0;const tt=(r['Transaction Type']||'').toLowerCase();if(tt.includes('refund')){refunds+=a}else{gross+=a;if(tt.includes('new pif'))newPif+=a;else if(tt.includes('payment plan'))pp+=a;else if(tt.includes('nonpif')||tt.includes('non pif'))dep+=a}});
+      return {gross,refunds,net:gross+refunds,newPif,pp,dep};
+    }
+    const ct=cCalc(cSales), cc=cCalc(cSales.filter(r=>(r['Product Sold']||'').toLowerCase().includes('coaching'))), cd=cCalc(cSales.filter(r=>(r['Product Sold']||'').toLowerCase().includes('downsell'))), cl=cCalc(cSales.filter(r=>(r['Product Sold']||'').toLowerCase().includes('lto')));
+    const cUe=new Set();cSales.forEach(r=>{const e=(r['Email']||'').toLowerCase();if(e)cUe.add(e)});
+    const cLtv=cUe.size>0?ct.net/cUe.size:0;
+    showDelta('revGross',totalM.gross,ct.gross);showDelta('revNet',totalM.net,ct.net);showDelta('revRefunds',totalM.refunds,ct.refunds,false,true);
+    showDelta('revLtv',ltv,cLtv);showDelta('revNewPif',totalM.newPif,ct.newPif);showDelta('revPaymentPlans',totalM.paymentPlans,ct.pp);showDelta('revDeposit',totalM.deposit,ct.dep);
+    showDelta('coachGross',coachM.gross,cc.gross);showDelta('coachNet',coachM.net,cc.net);
+    showDelta('dsGross',dsM.gross,cd.gross);showDelta('dsNet',dsM.net,cd.net);
+    showDelta('ltoGross',ltoM.gross,cl.gross);showDelta('ltoNet',ltoM.net,cl.net);
+  }
+
   // Revenue x Platform chart
   const platformMap = {};
   const dateMap = {};
@@ -4151,6 +4433,83 @@ function renderCoachingRevenue() {
   document.getElementById('crAvRevClient').textContent = fmt(avRevClient);
   document.getElementById('crAvContract').textContent = fmt(avContract);
   document.getElementById('crAvCollPct').textContent = avCollPct;
+
+  // ---- Comparison Period Deltas ----
+  if (compareActive) {
+    const cCoaching = filterByCompareDate(salesData, ['Date']).filter(r => (r['Product Sold'] || '').toLowerCase().includes('coaching'));
+    const chVal = document.getElementById('crFilterChannel').value;
+    const plVal = document.getElementById('crFilterPlatform').value;
+    const fnVal = document.getElementById('crFilterFunnel').value;
+    const loVal = document.getElementById('crFilterLocation').value;
+    let filtered = cCoaching;
+    if (chVal) filtered = filtered.filter(r => (r['Channel'] || '') === chVal);
+    if (plVal) filtered = filtered.filter(r => (r['Platform'] || '') === plVal);
+    if (fnVal) filtered = filtered.filter(r => (r['Funnel'] || '') === fnVal);
+    if (loVal) filtered = filtered.filter(r => (r['Location'] || '') === loVal);
+
+    let cGross = 0, cRefunds = 0, cNewRev = 0, cDepositRev = 0;
+    let cPifRev = 0, cPifCount = 0, cTotalUnits = 0;
+    let cCollPlanRev = 0, cCollPlanUnits = 0;
+    const cClientEmails = new Set();
+    let cNewSaleContracted = 0, cNewSaleCollected = 0, cNewSaleCount = 0;
+
+    filtered.forEach(row => {
+      const amt = parseFloat(row['Amount']) || 0;
+      const contracted = parseFloat(row['Amount Contracted']) || 0;
+      const tt = (row['Transaction Type'] || '').toLowerCase();
+      const email = (row['Email'] || '').toString().toLowerCase();
+      const isNewSale = tt.includes('new pif') || tt.includes('nonpif') || tt.includes('non pif') || tt.includes('non-pif');
+
+      if (tt.includes('refund')) {
+        cRefunds += amt;
+      } else {
+        cGross += amt;
+        cTotalUnits++;
+        if (email) cClientEmails.add(email);
+
+        if (tt.includes('new pif')) {
+          cNewRev += amt;
+          cPifRev += amt;
+          cPifCount++;
+        } else if (tt.includes('payment plan')) {
+          cCollPlanRev += amt;
+          cCollPlanUnits++;
+        } else if (tt.includes('nonpif') || tt.includes('non pif') || tt.includes('non-pif')) {
+          cDepositRev += amt;
+          cNewRev += amt;
+        }
+      }
+      if (isNewSale) {
+        cNewSaleCollected += amt;
+        if (contracted > 0) { cNewSaleContracted += contracted; cNewSaleCount++; }
+      }
+    });
+
+    const cNet = cGross + cRefunds;
+    const cPctNew = cGross > 0 ? (cNewRev / cGross * 100).toFixed(1) : 0;
+    const cPifPct = cTotalUnits > 0 ? (cPifCount / cTotalUnits * 100).toFixed(1) : 0;
+    const cTotalExpRev = cCollPlanRev;
+    const cPlanRevPct = cTotalExpRev > 0 ? (cCollPlanRev / cTotalExpRev * 100).toFixed(1) : 0;
+    const cAvRevClient = cClientEmails.size > 0 ? cNet / cClientEmails.size : 0;
+    const cAvContract = cNewSaleCount > 0 ? cNewSaleContracted / cNewSaleCount : 0;
+    const cAvCollPct = cNewSaleCount > 0 ? (cNewSaleContracted > 0 ? (cNewSaleCollected / cNewSaleContracted * 100).toFixed(1) : 0) : 0;
+
+    showDelta('crGross', gross, cGross, false, false, true);
+    showDelta('crRefunds', refunds, cRefunds, false, true, true);
+    showDelta('crNet', net, cNet, false, false, true);
+    showDelta('crNewRev', newRev, cNewRev, false, false, true);
+    showDelta('crDeposit', depositRev, cDepositRev, false, false, true);
+    showDelta('crPctNew', parseFloat(pctNew), cPctNew, true, false);
+    showDelta('crPifRev', pifRev, cPifRev, false, false, true);
+    showDelta('crPifUnits', pifCount, cPifCount, false, false);
+    showDelta('crPifPct', parseFloat(pifPct), cPifPct, true, false);
+    showDelta('crCollPlanRev', collPlanRev, cCollPlanRev, false, false, true);
+    showDelta('crCollPlanUnits', collPlanUnits, cCollPlanUnits, false, false);
+    showDelta('crPlanRevPct', parseFloat(planRevPct), cPlanRevPct, true, false);
+    showDelta('crAvRevClient', avRevClient, cAvRevClient, false, false, true);
+    showDelta('crAvContract', avContract, cAvContract, false, false, true);
+    showDelta('crAvCollPct', parseFloat(avCollPct) || 0, cAvCollPct, true, false);
+  }
 
   // ---- YTD Revenue Breakdown chart (monthly bar) ----
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -4491,6 +4850,74 @@ function renderDownsellRevenue() {
   document.getElementById('drAvContract').textContent = fmt(avContract);
   document.getElementById('drAvCollPct').textContent = avCollPct;
 
+  // ---- Comparison Period Deltas ----
+  if (compareActive) {
+    const cDownsell = filterByCompareDate(salesData, ['Date']).filter(r => (r['Product Sold'] || '').toLowerCase().includes('downsell'));
+    const chVal = document.getElementById('drFilterChannel').value;
+    const plVal = document.getElementById('drFilterPlatform').value;
+    const fnVal = document.getElementById('drFilterFunnel').value;
+    const loVal = document.getElementById('drFilterLocation').value;
+    let filtered = cDownsell;
+    if (chVal) filtered = filtered.filter(r => (r['Channel'] || '') === chVal);
+    if (plVal) filtered = filtered.filter(r => (r['Platform'] || '') === plVal);
+    if (fnVal) filtered = filtered.filter(r => (r['Funnel'] || '') === fnVal);
+    if (loVal) filtered = filtered.filter(r => (r['Location'] || '') === loVal);
+
+    let cGross = 0, cRefunds = 0, cNewRev = 0, cDepositRev = 0;
+    let cPifRev = 0, cPifCount = 0, cTotalUnits = 0;
+    let cCollPlanRev = 0, cCollPlanUnits = 0;
+    const cClientEmails = new Set();
+    let cNewSaleContracted = 0, cNewSaleCollected = 0, cNewSaleCount = 0;
+
+    filtered.forEach(row => {
+      const amt = parseFloat(row['Amount']) || 0;
+      const contracted = parseFloat(row['Amount Contracted']) || 0;
+      const tt = (row['Transaction Type'] || '').toLowerCase();
+      const email = (row['Email'] || '').toString().toLowerCase();
+      const isNewSale = tt.includes('new pif') || tt.includes('nonpif') || tt.includes('non pif') || tt.includes('non-pif');
+
+      if (tt.includes('refund')) {
+        cRefunds += amt;
+      } else {
+        cGross += amt;
+        cTotalUnits++;
+        if (email) cClientEmails.add(email);
+        if (tt.includes('new pif')) { cNewRev += amt; cPifRev += amt; cPifCount++; }
+        else if (tt.includes('payment plan')) { cCollPlanRev += amt; cCollPlanUnits++; }
+        else if (tt.includes('nonpif') || tt.includes('non pif') || tt.includes('non-pif')) { cDepositRev += amt; cNewRev += amt; }
+      }
+      if (isNewSale) {
+        cNewSaleCollected += amt;
+        if (contracted > 0) { cNewSaleContracted += contracted; cNewSaleCount++; }
+      }
+    });
+
+    const cNet = cGross + cRefunds;
+    const cPctNew = cGross > 0 ? (cNewRev / cGross * 100).toFixed(1) : 0;
+    const cPifPct = cTotalUnits > 0 ? (cPifCount / cTotalUnits * 100).toFixed(1) : 0;
+    const cTotalExpRev = cCollPlanRev;
+    const cPlanRevPct = cTotalExpRev > 0 ? (cCollPlanRev / cTotalExpRev * 100).toFixed(1) : 0;
+    const cAvRevClient = cClientEmails.size > 0 ? cNet / cClientEmails.size : 0;
+    const cAvContract = cNewSaleCount > 0 ? cNewSaleContracted / cNewSaleCount : 0;
+    const cAvCollPct = cNewSaleCount > 0 ? (cNewSaleContracted > 0 ? (cNewSaleCollected / cNewSaleContracted * 100).toFixed(1) : 0) : 0;
+
+    showDelta('drGross', gross, cGross, false, false, true);
+    showDelta('drRefunds', refunds, cRefunds, false, true, true);
+    showDelta('drNet', net, cNet, false, false, true);
+    showDelta('drNewRev', newRev, cNewRev, false, false, true);
+    showDelta('drDeposit', depositRev, cDepositRev, false, false, true);
+    showDelta('drPctNew', parseFloat(pctNew), cPctNew, true, false);
+    showDelta('drPifRev', pifRev, cPifRev, false, false, true);
+    showDelta('drPifUnits', pifCount, cPifCount, false, false);
+    showDelta('drPifPct', parseFloat(pifPct), cPifPct, true, false);
+    showDelta('drCollPlanRev', collPlanRev, cCollPlanRev, false, false, true);
+    showDelta('drCollPlanUnits', collPlanUnits, cCollPlanUnits, false, false);
+    showDelta('drPlanRevPct', parseFloat(planRevPct), cPlanRevPct, true, false);
+    showDelta('drAvRevClient', avRevClient, cAvRevClient, false, false, true);
+    showDelta('drAvContract', avContract, cAvContract, false, false, true);
+    showDelta('drAvCollPct', parseFloat(avCollPct) || 0, cAvCollPct, true, false);
+  }
+
   // YTD Revenue Breakdown
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const ytdMonths = {};
@@ -4788,6 +5215,75 @@ function renderLtoRevenue() {
   document.getElementById('lrAvPayPlan').textContent = planCount > 0 ? fmt(avPayPlan) : 'N/A';
   document.getElementById('lrAvRevClient').textContent = clientEmails.size > 0 ? fmt(avRevClient) : 'N/A';
 
+  // ---- Comparison Period Deltas ----
+  if (compareActive) {
+    const cLto = filterByCompareDate(salesData, ['Date']).filter(r => (r['Product Sold'] || '').toLowerCase().includes('lto'));
+    const chVal = document.getElementById('lrFilterChannel').value;
+    const plVal = document.getElementById('lrFilterPlatform').value;
+    const fnVal = document.getElementById('lrFilterFunnel').value;
+    const loVal = document.getElementById('lrFilterLocation').value;
+    let filtered = cLto;
+    if (chVal) filtered = filtered.filter(r => (r['Channel'] || '') === chVal);
+    if (plVal) filtered = filtered.filter(r => (r['Platform'] || '') === plVal);
+    if (fnVal) filtered = filtered.filter(r => (r['Funnel'] || '') === fnVal);
+    if (loVal) filtered = filtered.filter(r => (r['Location'] || '') === loVal);
+
+    let cGross = 0, cRefunds = 0, cRefundUnits = 0, cDisputes = 0, cNewRev = 0;
+    let cCollPlanRev = 0, cCollPlanUnits = 0, cTotalUnits = 0;
+    const cClientEmails = new Set();
+    let cTotalContracted = 0, cContractedCount = 0;
+    let cPlanContracted = 0, cPlanCount = 0;
+
+    filtered.forEach(row => {
+      const amt = parseFloat(row['Amount']) || 0;
+      const contracted = parseFloat(row['Amount Contracted']) || 0;
+      const tt = (row['Transaction Type'] || '').toLowerCase();
+      const email = (row['Email'] || '').toString().toLowerCase();
+
+      if (tt.includes('refund')) {
+        cRefunds += amt;
+        cRefundUnits++;
+      } else if (tt.includes('dispute') || tt.includes('chargeback')) {
+        cDisputes += amt;
+      } else {
+        cGross += amt;
+        cTotalUnits++;
+        if (email) cClientEmails.add(email);
+        if (tt.includes('new pif') || tt.includes('nonpif') || tt.includes('non pif') || tt.includes('non-pif')) {
+          cNewRev += amt;
+        } else if (tt.includes('payment plan')) {
+          cCollPlanRev += amt;
+          cCollPlanUnits++;
+        }
+      }
+      if (contracted > 0 && tt.includes('payment plan')) { cPlanContracted += contracted; cPlanCount++; }
+      if (contracted > 0) { cTotalContracted += contracted; cContractedCount++; }
+    });
+
+    const cNet = cGross + cRefunds + cDisputes;
+    const cPctNew = cGross > 0 ? (cNewRev / cGross * 100).toFixed(1) : 0;
+    const cDisputeRate = cGross > 0 ? (Math.abs(cDisputes) / cGross * 100).toFixed(1) : 0;
+    const cRefundRate = cGross > 0 ? (Math.abs(cRefunds) / cGross * 100).toFixed(1) : 0;
+    const cAov = cTotalUnits > 0 ? cGross / cTotalUnits : 0;
+    const cAvPayPlan = cPlanCount > 0 ? cPlanContracted / cPlanCount : 0;
+    const cAvRevClient = cClientEmails.size > 0 ? cNet / cClientEmails.size : 0;
+
+    showDelta('lrGross', gross, cGross, false, false, true);
+    showDelta('lrNet', net, cNet, false, false, true);
+    showDelta('lrNewRev', newRev, cNewRev, false, false, true);
+    showDelta('lrDisputes', disputes, cDisputes, false, true, true);
+    showDelta('lrDisputeRate', parseFloat(disputeRate), cDisputeRate, true, true);
+    showDelta('lrPctNew', parseFloat(pctNew), cPctNew, true, false);
+    showDelta('lrRefunds', refunds, cRefunds, false, true, true);
+    showDelta('lrRefundUnits', refundUnits, cRefundUnits, false, true);
+    showDelta('lrRefundRate', parseFloat(refundRate), cRefundRate, true, true);
+    showDelta('lrCollPlanRev', collPlanRev, cCollPlanRev, false, false, true);
+    showDelta('lrCollPlanUnits', collPlanUnits, cCollPlanUnits, false, false);
+    showDelta('lrAov', aov, cAov, false, false, true);
+    showDelta('lrAvPayPlan', avPayPlan, cAvPayPlan, false, false, true);
+    showDelta('lrAvRevClient', avRevClient, cAvRevClient, false, false, true);
+  }
+
   // YTD Revenue Breakdown
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const ytdMonths = {};
@@ -5083,6 +5579,33 @@ function renderApplicationOverview() {
   document.getElementById('aoHqLeads').textContent = hq;
   document.getElementById('aoLqLeads').textContent = lq;
   document.getElementById('aoDqLeads').textContent = dq;
+
+  // === COMPARISON DELTAS ===
+  if (compareActive) {
+    const cAppsData = filterByCompareDate(appData, ['Date Submitted']);
+    const cEmailMap = {};
+    cAppsData.forEach(r => {
+      const e = (r['Email'] || '').toString().toLowerCase();
+      if (!e) return;
+      if (!cEmailMap[e]) cEmailMap[e] = r;
+    });
+    const cUniqueApps = Object.keys(cEmailMap).length;
+    const cTotalApps = cAppsData.length;
+    const cDuplicates = cTotalApps - cUniqueApps;
+    let cHq = 0, cLq = 0, cDq = 0;
+    cAppsData.forEach(r => {
+      const rt = (r['Result Tag'] || '').toUpperCase();
+      if (rt.includes('HQ')) cHq++;
+      else if (rt.includes('LQ')) cLq++;
+      else cDq++;
+    });
+    showDelta('aoTotalApps',totalApps,cTotalApps);
+    showDelta('aoNewLeads',uniqueApps,cUniqueApps);
+    showDelta('aoDuplicates',duplicates,cDuplicates);
+    showDelta('aoHqLeads',hq,cHq);
+    showDelta('aoLqLeads',lq,cLq);
+    showDelta('aoDqLeads',dq,cDq,false,true);
+  }
 
   // App Results Doughnut
   if (chartInstances.aoResults) chartInstances.aoResults.destroy();
@@ -5634,6 +6157,60 @@ function renderAppAttribution() {
   document.getElementById('aaOutboundDials').textContent = outboundDials;
   document.getElementById('aaDqDialPct').textContent = dqDialPct;
 
+  // ---- Comparison Period Deltas ----
+  if (compareActive) {
+    const cApps = filterByCompareDate(appData, ['Date Submitted']);
+    const ch = document.getElementById('aaChannelFilter').value;
+    const pl = document.getElementById('aaPlatformFilter').value;
+    const fn = document.getElementById('aaFunnelFilter').value;
+    const lo = document.getElementById('aaLocationFilter').value;
+    let filtered = cApps;
+    if (ch) filtered = filtered.filter(r => (r['Channel'] || '') === ch);
+    if (pl) filtered = filtered.filter(r => (r['Platform'] || '') === pl);
+    if (fn) filtered = filtered.filter(r => (r['Funnel'] || '') === fn);
+    if (lo) filtered = filtered.filter(r => (r['Location'] || '') === lo);
+
+    const cEmailSet = new Set();
+    filtered.forEach(r => { const e = (r['Email'] || '').toString().toLowerCase(); if (e) cEmailSet.add(e); });
+    const cTotalApps = filtered.length;
+    const cUniqueApps = cEmailSet.size;
+    const cDuplicates = cTotalApps - cUniqueApps;
+
+    let cHq = 0, cLq = 0, cDq = 0;
+    filtered.forEach(r => {
+      const rt = (r['Result Tag'] || '').toUpperCase();
+      if (rt.includes('HQ')) cHq++;
+      else if (rt.includes('LQ')) cLq++;
+      else cDq++;
+    });
+
+    let cOutboundDials = 0;
+    if (callData) {
+      const cDqEmails = new Set();
+      filtered.forEach(r => {
+        const rt = (r['Result Tag'] || '').toUpperCase();
+        if (!rt.includes('HQ') && !rt.includes('LQ')) {
+          const e = (r['Email'] || '').toString().toLowerCase();
+          if (e) cDqEmails.add(e);
+        }
+      });
+      const cDialedDqEmails = new Set();
+      callData.forEach(r => {
+        const e = (r['Email'] || '').toString().toLowerCase();
+        if (e && cDqEmails.has(e)) cDialedDqEmails.add(e);
+      });
+      cOutboundDials = cDialedDqEmails.size;
+    }
+    const cDqDialPct = cDq > 0 ? (cOutboundDials / cDq * 100).toFixed(2) : 0;
+
+    showDelta('aaTotalApps', totalApps, cTotalApps, false, false);
+    showDelta('aaNewLeads', uniqueApps, cUniqueApps, false, false);
+    showDelta('aaDuplicates', duplicates, cDuplicates, false, true);
+    showDelta('aaDqLeads', dq, cDq, false, true);
+    showDelta('aaOutboundDials', outboundDials, cOutboundDials, false, false);
+    showDelta('aaDqDialPct', parseFloat(dqDialPct) || 0, cDqDialPct, true, false);
+  }
+
   // --- Lead Location doughnut ---
   const locBuckets = {};
   apps.forEach(r => {
@@ -5998,6 +6575,59 @@ function renderMarketingOverview() {
   document.getElementById('mkDqApps').textContent = dqApps;
   document.getElementById('mkDqCalls').textContent = dqCalls;
 
+  // === COMPARISON DELTAS ===
+  if (compareActive) {
+    const cAllApps = filterByCompareDate(appData, ['Date Submitted']);
+    const cAllCalls = filterByCompareDate(callData, ['Date Created']);
+    const cSales = filterByCompareDate(salesData, ['Date']);
+    const cApps = cAllApps.filter(r => !isDqApp(r));
+    const cCalls = cAllCalls.filter(r => !isDqCall(r));
+    const cPastCalls = cCalls.filter(row => { const scheduled = getDateField(row, ['Date Scheduled']); if (!scheduled) return true; return scheduled <= today; });
+    const cAppEmails = new Set();
+    cApps.forEach(r => { const e = r['Email']; if (e) cAppEmails.add(e.toString().toLowerCase()); });
+    const cUniqueApps = cAppEmails.size;
+    const cTriageCalls = cCalls.filter(r => { const ct = r['Call Type']; return ct && ct.toLowerCase().includes('triage'); });
+    const cBookedTriage = cTriageCalls.length;
+    const cSalesCalls = cCalls.filter(r => { const ct = r['Call Type']; return ct && (ct.includes('1C Sales') || ct.includes('2C Sales')); });
+    const cBookedSales = cSalesCalls.length;
+    const cSales2C = cCalls.filter(r => { const ct = r['Call Type']; return ct && ct.includes('2C Sales'); });
+    const cPastSalesCalls = cPastCalls.filter(r => { const ct = r['Call Type']; return ct && (ct.includes('1C Sales') || ct.includes('2C Sales')); });
+    const cSalesShowed = cPastSalesCalls.filter(r => { const s = (r['Sales Call Status'] || '').toLowerCase(); return s && s !== 'no show'; });
+    const cSalesClosed = cSalesShowed.filter(r => { const s = (r['Sales Call Status'] || '').toLowerCase(); return s.includes('closed') || s.includes('sold'); });
+    let cNewRev = 0, cUnitsSold = 0;
+    cSales.forEach(row => {
+      const amt = parseFloat(row['Amount']) || 0;
+      const tt = (row['Transaction Type'] || '').toLowerCase();
+      const ps = (row['Product Sold'] || '').toLowerCase();
+      const isCoachOrDs = ps.includes('coaching') || ps.includes('downsell');
+      if (!isCoachOrDs) return;
+      if (tt.includes('refund') || tt.includes('dispute')) return;
+      if (tt.includes('new pif') || tt.includes('nonpif') || tt.includes('non pif') || tt.includes('non-pif')) {
+        cNewRev += amt;
+        cUnitsSold++;
+      }
+    });
+    const cAppTriagePct = cUniqueApps > 0 ? (cBookedTriage / cUniqueApps * 100) : 0;
+    const cTriageSalesPct = cBookedTriage > 0 ? (cSales2C.length / cBookedTriage * 100) : 0;
+    const cCloseRate = cSalesShowed.length > 0 ? (cSalesClosed.length / cSalesShowed.length * 100) : 0;
+    const cAov = cUnitsSold > 0 ? cNewRev / cUnitsSold : 0;
+    const cAppSalesPct = cUniqueApps > 0 ? (cBookedSales / cUniqueApps * 100) : 0;
+    const cAppCloseRate = cUniqueApps > 0 ? (cSalesClosed.length / cUniqueApps * 100) : 0;
+    const cRevPerApp = cUniqueApps > 0 ? (cNewRev / cUniqueApps) : 0;
+    const cRevPerTriage = cBookedTriage > 0 ? (cNewRev / cBookedTriage) : 0;
+    const cRevPerSales = cBookedSales > 0 ? (cNewRev / cBookedSales) : 0;
+    showDelta('mkApps',uniqueApps,cUniqueApps);
+    showDelta('mkTriageBooked',bookedTriage,cBookedTriage);
+    showDelta('mkSalesBooked',bookedSales,cBookedSales);
+    showDelta('mkCloseRate',parseFloat(closeRate),cCloseRate,true);
+    showDelta('mkNewRev',newRev,cNewRev);
+    showDelta('mkUnitsSold',unitsSold,cUnitsSold);
+    showDelta('mkAov',aov,cAov);
+    showDelta('mkRevApp',parseFloat(revPerApp),cRevPerApp);
+    showDelta('mkRevTriage',parseFloat(revPerTriage),cRevPerTriage);
+    showDelta('mkRevSales',parseFloat(revPerSales),cRevPerSales);
+  }
+
   // --- YTD Charts ---
   const curYear = new Date().getFullYear();
   const curMonth = new Date().getMonth();
@@ -6337,6 +6967,35 @@ function renderYTDPage() {
   document.getElementById('ytdBarCenter').style.color = ahead >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
   document.getElementById('ytdBarEnd').textContent = fmt(annualGoal);
 
+  // ---- Comparison Period Deltas ----
+  if (compareActive) {
+    const cMonths = Array.from({length: 12}, () => 0);
+    const cSalesData = filterByCompareDate(salesData, ['Date']);
+
+    // For comparison period, we need to determine what the "current" month equivalent is
+    // Calculate the same YTD through "current month" of comparison period
+    const cPeriodMs = endDate - startDate;
+    const cPeriodMonths = cPeriodMs / (1000 * 60 * 60 * 24 * 30.44); // approximate
+
+    cSalesData.forEach(row => {
+      const d = getDateField(row, ['Date']);
+      if (!d) return;
+      // Map comparison period months to 0-11 range
+      const cMonthInPeriod = d.getMonth();
+      if (cMonthInPeriod >= 0 && cMonthInPeriod < 12) {
+        cMonths[cMonthInPeriod] += parseFloat(row['Amount']) || 0;
+      }
+    });
+
+    // YTD total for comparison period (through equivalent month)
+    const cYtdTotal = cMonths.reduce((s, v, i) => i <= currentMonth ? s + v : s, 0);
+
+    showDelta('ytdCollected', ytdTotal, cYtdTotal, false, false, true);
+    showDelta('ytdTargetToDate', ytdTargetToDate, cYtdTotal, false, false, true);
+    showDelta('ytdAheadBehind', ahead, cYtdTotal - ytdTargetToDate, false, false, true);
+    showDelta('ytdProjected', projectedYearEnd, (cYtdTotal / (currentMonth + 1)) * 12, false, false, true);
+  }
+
   // --- Quarterly Cards ---
   const qLabels = ['Q1 (Jan–Mar)', 'Q2 (Apr–Jun)', 'Q3 (Jul–Sep)', 'Q4 (Oct–Dec)'];
   const qStartMonths = [0, 3, 6, 9];
@@ -6563,6 +7222,45 @@ function renderSalesOverview() {
   el = document.getElementById('soTriagePassThroughDelta');
   if (el) el.innerHTML = '';
 
+  // === COMPARISON DELTAS (TRIAGE) ===
+  if (compareActive) {
+    const cCalls = filterByCompareDate(callData, ['Date Created']);
+    const cSales = filterByCompareDate(salesData, ['Date']);
+    const cToday = new Date(); cToday.setHours(23,59,59,999);
+    const cPastCalls = cCalls.filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= cToday; });
+    const cTriageCalls = cCalls.filter(r => (r['Call Type']||'').toLowerCase().includes('triage'));
+    const cPastTriage = cPastCalls.filter(r => (r['Call Type']||'').toLowerCase().includes('triage'));
+    function cCountBooked(list, statusField) {
+      const seen = new Set(); let c=0;
+      list.forEach(r => {
+        const st = (r[statusField]||'').toLowerCase();
+        if (st === 'rescheduled' || st === 'cancelled dq') return;
+        const em = (r['Email']||'').toString().toLowerCase();
+        if (!em || seen.has(em)) return;
+        seen.add(em); c++;
+      });
+      return c;
+    }
+    const cTriageBooked = cCountBooked(cTriageCalls, 'Triage Status');
+    const cTriageWithStatus = cPastTriage.filter(r => r['Triage Status']);
+    const cTriageShowed = cTriageWithStatus.filter(r => didShow(r['Triage Status']));
+    const cTriageNoShow = cTriageWithStatus.filter(r => { const s = (r['Triage Status']||'').toLowerCase(); return s === 'no show' || s === 'no-show'; });
+    const cTriageShowRate = cTriageWithStatus.length > 0 ? (cTriageShowed.length / cTriageWithStatus.length * 100) : 0;
+    const cTriageNoShowRate = cTriageWithStatus.length > 0 ? (cTriageNoShow.length / cTriageWithStatus.length * 100) : 0;
+    const cTriageShowedEmails = new Set();
+    cTriageShowed.forEach(r => { const em = (r['Email']||'').toLowerCase(); if (em) cTriageShowedEmails.add(em); });
+    const cSales1C = cCalls.filter(r => (r['Call Type']||'').includes('1C Sales'));
+    const cSales2C = cCalls.filter(r => (r['Call Type']||'').includes('2C Sales'));
+    const cSalesEmails = new Set();
+    [...cSales1C, ...cSales2C].forEach(r => { const em = (r['Email']||'').toLowerCase(); if (em) cSalesEmails.add(em); });
+    const cTriagePassed = [...cTriageShowedEmails].filter(e => cSalesEmails.has(e)).length;
+    const cTriagePassThrough = cTriageShowedEmails.size > 0 ? (cTriagePassed / cTriageShowedEmails.size * 100) : 0;
+    showDelta('soTriageBooked',triageBooked,cTriageBooked);
+    showDelta('soTriageShowRate',triageShowRate,cTriageShowRate,true);
+    showDelta('soTriageNoShowRate',triageNoShowRate,cTriageNoShowRate,true,true);
+    showDelta('soTriagePassThrough',triagePassThrough,cTriagePassThrough,true);
+  }
+
   // Triage charts
   const triagePlatCounts = {};
   triageCalls.forEach(r => { const p = r['Platform']||'Unknown'; triagePlatCounts[p] = (triagePlatCounts[p]||0)+1; });
@@ -6621,6 +7319,35 @@ function renderSalesOverview() {
   el = document.getElementById('so2cTriageCloseRateDelta');
   if (el) el.innerHTML = '';
 
+  // === COMPARISON DELTAS (2C) ===
+  if (compareActive) {
+    const c2CCalls = filterByCompareDate(callData, ['Date Created']).filter(r => (r['Call Type']||'').includes('2C Sales'));
+    const c2CToday = new Date(); c2CToday.setHours(23,59,59,999);
+    const c2CPastCalls = filterByCompareDate(callData, ['Date Created']).filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= c2CToday; }).filter(r => (r['Call Type']||'').includes('2C Sales'));
+    function c2CCountBooked(list) {
+      const seen = new Set(); let c=0;
+      list.forEach(r => {
+        const st = (r['Sales Call Status']||'').toLowerCase();
+        if (st === 'rescheduled' || st === 'cancelled dq') return;
+        const em = (r['Email']||'').toString().toLowerCase();
+        if (!em || seen.has(em)) return; seen.add(em); c++;
+      });
+      return c;
+    }
+    const c2CBooked = c2CCountBooked(c2CCalls);
+    const c2CWithStatus = c2CPastCalls.filter(r => r['Sales Call Status']);
+    const c2CShowed = c2CWithStatus.filter(r => didShow(r['Sales Call Status']));
+    const c2CNoShow = c2CWithStatus.filter(r => { const s = (r['Sales Call Status']||'').toLowerCase(); return s === 'no show' || s === 'no-show'; });
+    const c2CShowRate = c2CWithStatus.length > 0 ? (c2CShowed.length / c2CWithStatus.length * 100) : 0;
+    const c2CNoShowRate = c2CWithStatus.length > 0 ? (c2CNoShow.length / c2CWithStatus.length * 100) : 0;
+    const c2CClosed = c2CShowed.filter(r => (r['Sales Call Status']||'').toLowerCase() === 'showed c');
+    const c2CCloseRate = c2CShowed.length > 0 ? (c2CClosed.length / c2CShowed.length * 100) : 0;
+    showDelta('so2cBooked',sales2CBooked,c2CBooked);
+    showDelta('so2cShowRate',sales2CShowRate,c2CShowRate,true);
+    showDelta('so2cNoShowRate',sales2CNoShowRate,c2CNoShowRate,true,true);
+    showDelta('so2cTriageCloseRate',sales2CCloseRate,c2CCloseRate,true);
+  }
+
   // 2C charts
   const sales2CPlatCounts = {};
   sales2C.forEach(r => { const p = r['Platform']||'Unknown'; sales2CPlatCounts[p] = (sales2CPlatCounts[p]||0)+1; });
@@ -6678,6 +7405,35 @@ function renderSalesOverview() {
   if (el) el.textContent = sales1CCloseRate.toFixed(1) + '%';
   el = document.getElementById('so1cTriageCloseRateDelta');
   if (el) el.innerHTML = '';
+
+  // === COMPARISON DELTAS (1C) ===
+  if (compareActive) {
+    const c1CCalls = filterByCompareDate(callData, ['Date Created']).filter(r => (r['Call Type']||'').includes('1C Sales'));
+    const c1CToday = new Date(); c1CToday.setHours(23,59,59,999);
+    const c1CPastCalls = filterByCompareDate(callData, ['Date Created']).filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= c1CToday; }).filter(r => (r['Call Type']||'').includes('1C Sales'));
+    function c1CCountBooked(list) {
+      const seen = new Set(); let c=0;
+      list.forEach(r => {
+        const st = (r['Sales Call Status']||'').toLowerCase();
+        if (st === 'rescheduled' || st === 'cancelled dq') return;
+        const em = (r['Email']||'').toString().toLowerCase();
+        if (!em || seen.has(em)) return; seen.add(em); c++;
+      });
+      return c;
+    }
+    const c1CBooked = c1CCountBooked(c1CCalls);
+    const c1CWithStatus = c1CPastCalls.filter(r => r['Sales Call Status']);
+    const c1CShowed = c1CWithStatus.filter(r => didShow(r['Sales Call Status']));
+    const c1CNoShow = c1CWithStatus.filter(r => { const s = (r['Sales Call Status']||'').toLowerCase(); return s === 'no show' || s === 'no-show'; });
+    const c1CShowRate = c1CWithStatus.length > 0 ? (c1CShowed.length / c1CWithStatus.length * 100) : 0;
+    const c1CNoShowRate = c1CWithStatus.length > 0 ? (c1CNoShow.length / c1CWithStatus.length * 100) : 0;
+    const c1CClosed = c1CShowed.filter(r => (r['Sales Call Status']||'').toLowerCase() === 'showed c');
+    const c1CCloseRate = c1CShowed.length > 0 ? (c1CClosed.length / c1CShowed.length * 100) : 0;
+    showDelta('so1cBooked',sales1CBooked,c1CBooked);
+    showDelta('so1cShowRate',sales1CShowRate,c1CShowRate,true);
+    showDelta('so1cNoShowRate',sales1CNoShowRate,c1CNoShowRate,true,true);
+    showDelta('so1cTriageCloseRate',sales1CCloseRate,c1CCloseRate,true);
+  }
 
   // 1C charts
   const sales1CPlatCounts = {};
@@ -6803,6 +7559,61 @@ function renderTriagePerformance() {
   const cPassThroughRate = showed.length > 0 ? (passedEmails.size / showed.length * 100) : 0;
   el = document.getElementById('tp_cPassThrough');
   if (el) el.textContent = cPassThroughRate.toFixed(1) + '%';
+
+  // === COMPARISON DELTAS ===
+  if (compareActive) {
+    const cCalls = filterByCompareDate(callData, ['Date Created']);
+    const cSalesData = filterByCompareDate(salesData, ['Date']);
+    const cToday = new Date(); cToday.setHours(23,59,59,999);
+    const cPastCalls = cCalls.filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= cToday; });
+    const cTriageCalls = cCalls.filter(r => (r['Call Type']||'').toLowerCase().includes('triage'));
+    const cPastTriage = cPastCalls.filter(r => (r['Call Type']||'').toLowerCase().includes('triage'));
+    function cCountBooked(list) {
+      const seen = new Set(); let c=0;
+      list.forEach(r => {
+        const st = (r['Triage Status']||'').toLowerCase();
+        if (st === 'rescheduled' || st === 'cancelled dq') return;
+        const em = (r['Email']||'').toString().toLowerCase();
+        if (!em || seen.has(em)) return; seen.add(em); c++;
+      });
+      return c;
+    }
+    const cBooked = cCountBooked(cTriageCalls);
+    const cTriageWithStatus = cPastTriage.filter(r => r['Triage Status']);
+    const cShowed = cTriageWithStatus.filter(r => didShow(r['Triage Status']));
+    const cShowRate = cTriageWithStatus.length > 0 ? (cShowed.length / cTriageWithStatus.length * 100) : 0;
+    const cNoShow = cTriageWithStatus.filter(r => { const s = (r['Triage Status']||'').toLowerCase(); return s === 'no show' || s === 'no-show'; });
+    const cNoShowRate = cTriageWithStatus.length > 0 ? (cNoShow.length / cTriageWithStatus.length * 100) : 0;
+    const cShowedEmails = new Set();
+    cShowed.forEach(r => { const em = (r['Email']||'').toLowerCase(); if(em) cShowedEmails.add(em); });
+    const cRevFromTriage = cSalesData.filter(r => cShowedEmails.has((r['Email']||'').toLowerCase())).reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
+    const cTRevPerCall = cBooked > 0 ? cRevFromTriage / cBooked : 0;
+    const cSalesCalls = cCalls.filter(r => { const ct = r['Call Type']||''; return ct.includes('1C Sales') || ct.includes('2C Sales'); });
+    const cPassedEmails = new Set();
+    cTriageCalls.forEach(r => {
+      const em = (r['Email']||'').toLowerCase();
+      if (em && cSalesCalls.some(s => (s['Email']||'').toLowerCase() === em)) cPassedEmails.add(em);
+    });
+    const cRevFromPassed = cSalesData.filter(r => cPassedEmails.has((r['Email']||'').toLowerCase())).reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
+    const cCRevPerCall = cPassedEmails.size > 0 ? cRevFromPassed / cPassedEmails.size : 0;
+    const cTPassThroughRate = cBooked > 0 ? (cPassedEmails.size / cBooked * 100) : 0;
+    const cCPassThroughRate = cShowed.length > 0 ? (cPassedEmails.size / cShowed.length * 100) : 0;
+    const cClosedFromTriage = cShowed.filter(r => {
+      const em = (r['Email']||'').toLowerCase();
+      return cSalesCalls.some(s => (s['Email']||'').toLowerCase() === em && (s['Sales Call Status']||'').toLowerCase() === 'showed c');
+    }).length;
+    const cTCloseRate = cShowed.length > 0 ? (cClosedFromTriage / cShowed.length * 100) : 0;
+    const cCCloseRate = cBooked > 0 ? (cClosedFromTriage / cBooked * 100) : 0;
+    showDelta('tp_booked',booked,cBooked);
+    showDelta('tp_showRate',showRate,cShowRate,true);
+    showDelta('tp_noShowRate',noShowRate,cNoShowRate,true,true);
+    showDelta('tp_tPassThrough',tPassThroughRate,cTPassThroughRate,true);
+    showDelta('tp_cPassThrough',cPassThroughRate,cCPassThroughRate,true);
+    showDelta('tp_tCloseRate',tCloseRate,cTCloseRate,true);
+    showDelta('tp_cCloseRate',cCloseRate,cCCloseRate,true);
+    showDelta('tp_tRevenuePerCall',tRevPerCall,cTRevPerCall);
+    showDelta('tp_cRevenuePerCall',cRevPerCall,cCRevPerCall);
+  }
 
   // [T] Close Rate: % of triage showed that have a sales call with 'Showed C' status
   const closedFromTriage = showed.filter(r => {
@@ -7016,6 +7827,49 @@ function renderSalesCallPerformance() {
   if (el) el.textContent = spTCloseRate.toFixed(1) + '%';
   el = document.getElementById('sp_cCloseRate');
   if (el) el.textContent = spCCloseRate.toFixed(1) + '%';
+
+  // === COMPARISON DELTAS ===
+  if (compareActive) {
+    const cCalls = filterByCompareDate(callData, ['Date Created']);
+    const cSalesData = filterByCompareDate(salesData, ['Date']);
+    const cToday = new Date(); cToday.setHours(23,59,59,999);
+    const cPastCalls = cCalls.filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= cToday; });
+    const cSalesCalls = cCalls.filter(r => { const ct = r['Call Type']||''; return ct.includes('1C Sales') || ct.includes('2C Sales'); });
+    const cPastSales = cPastCalls.filter(r => { const ct = r['Call Type']||''; return ct.includes('1C Sales') || ct.includes('2C Sales'); });
+    function cCountBooked(list) {
+      const seen = new Set(); let c=0;
+      list.forEach(r => {
+        const st = (r['Sales Call Status']||'').toLowerCase();
+        if (st === 'rescheduled' || st === 'cancelled dq') return;
+        const em = (r['Email']||'').toString().toLowerCase();
+        if (!em || seen.has(em)) return; seen.add(em); c++;
+      });
+      return c;
+    }
+    const cBooked = cCountBooked(cSalesCalls);
+    const cPsWithStatus = cPastSales.filter(r => r['Sales Call Status']);
+    const cShowed = cPsWithStatus.filter(r => didShow(r['Sales Call Status']));
+    const cNoShow = cPsWithStatus.filter(r => { const s = (r['Sales Call Status']||'').toLowerCase(); return s === 'no show' || s === 'no-show'; });
+    const cShowRate = cPsWithStatus.length > 0 ? (cShowed.length / cPsWithStatus.length * 100) : 0;
+    const cNoShowRate = cPsWithStatus.length > 0 ? (cNoShow.length / cPsWithStatus.length * 100) : 0;
+    const cClosed = cShowed.filter(r => (r['Sales Call Status']||'').toLowerCase() === 'showed c');
+    const cCloseRate = cShowed.length > 0 ? (cClosed.length / cShowed.length * 100) : 0;
+    const cClosedEmails = new Set();
+    cClosed.forEach(r => { const em = (r['Email']||'').toLowerCase(); if(em) cClosedEmails.add(em); });
+    const cClosedSalesRows = cSalesData.filter(r => cClosedEmails.has((r['Email']||'').toLowerCase()));
+    const cRevCollected = cClosedSalesRows.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
+    const cTRevPerCall = cBooked > 0 ? cRevCollected / cBooked : 0;
+    const cCRevPerCall = cShowed.length > 0 ? cRevCollected / cShowed.length : 0;
+    const cSpTCloseRate = cBooked > 0 ? (cClosed.length / cBooked * 100) : 0;
+    const cSpCCloseRate = cShowed.length > 0 ? (cClosed.length / cShowed.length * 100) : 0;
+    showDelta('sp_booked',booked,cBooked);
+    showDelta('sp_showRate',showRate,cShowRate,true);
+    showDelta('sp_noShowRate',noShowRate,cNoShowRate,true,true);
+    showDelta('sp_tCloseRate',spTCloseRate,cSpTCloseRate,true);
+    showDelta('sp_cCloseRate',spCCloseRate,cSpCCloseRate,true);
+    showDelta('sp_tRevenuePerCall',tRevPerCall,cTRevPerCall);
+    showDelta('sp_cRevenuePerCall',cRevPerCall,cCRevPerCall);
+  }
 
   // Insights panel - 1C vs 2C comparison (last 12 months) — uses raw callData/salesData, NOT date-filtered
   const last12 = new Date();
@@ -7255,6 +8109,53 @@ function renderCallTypePerformance(callTypeFilter, prefix) {
   if (el) el.textContent = '—';
   el = document.getElementById(prefix+'_depositClosePct');
   if (el) el.textContent = '—';
+
+  // === COMPARISON DELTAS ===
+  if (compareActive) {
+    const cCalls = filterByCompareDate(callData, ['Date Created']);
+    const cSalesData = filterByCompareDate(salesData, ['Date']);
+    const cToday = new Date(); cToday.setHours(23,59,59,999);
+    const cPastCalls = cCalls.filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= cToday; });
+    const cTypeCalls = cCalls.filter(r => (r['Call Type']||'').includes(callTypeFilter));
+    const cPastTypeCalls = cPastCalls.filter(r => (r['Call Type']||'').includes(callTypeFilter));
+    function cCountBooked(list) {
+      const seen = new Set(); let c=0;
+      list.forEach(r => {
+        const st = (r['Sales Call Status']||'').toLowerCase();
+        if (st === 'rescheduled' || st === 'cancelled dq') return;
+        const em = (r['Email']||'').toString().toLowerCase();
+        if (!em || seen.has(em)) return; seen.add(em); c++;
+      });
+      return c;
+    }
+    const cBooked = cCountBooked(cTypeCalls);
+    const cPtWithStatus = cPastTypeCalls.filter(r => r['Sales Call Status']);
+    const cShowed = cPtWithStatus.filter(r => didShow(r['Sales Call Status']));
+    const cNoShow = cPtWithStatus.filter(r => { const s = (r['Sales Call Status']||'').toLowerCase(); return s === 'no show' || s === 'no-show'; });
+    const cShowRate = cPtWithStatus.length > 0 ? (cShowed.length/cPtWithStatus.length*100) : 0;
+    const cNoShowRate = cPtWithStatus.length > 0 ? (cNoShow.length/cPtWithStatus.length*100) : 0;
+    const cClosed = cShowed.filter(r => (r['Sales Call Status']||'').toLowerCase() === 'showed c');
+    const cCloseRate = cShowed.length > 0 ? (cClosed.length/cShowed.length*100) : 0;
+    const cClosedEmails = new Set();
+    cClosed.forEach(r => { const em = (r['Email']||'').toLowerCase(); if(em) cClosedEmails.add(em); });
+    const cClosedSalesRows = cSalesData.filter(r => cClosedEmails.has((r['Email']||'').toLowerCase()));
+    const cRevCollected = cClosedSalesRows.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
+    const cAov = cClosedSalesRows.length > 0 ? cRevCollected/cClosedSalesRows.length : 0;
+    const cCtpTCloseRate = cBooked > 0 ? (cClosed.length / cBooked * 100) : 0;
+    const cCtpCCloseRate = cShowed.length > 0 ? (cClosed.length / cShowed.length * 100) : 0;
+    el = document.getElementById(prefix+'_booked');
+    if (el && compareActive) showDelta(prefix+'_booked',booked,cBooked);
+    el = document.getElementById(prefix+'_showRate');
+    if (el && compareActive) showDelta(prefix+'_showRate',showRate,cShowRate,true);
+    el = document.getElementById(prefix+'_noShowRate');
+    if (el && compareActive) showDelta(prefix+'_noShowRate',noShowRate,cNoShowRate,true,true);
+    el = document.getElementById(prefix+'_tCloseRate');
+    if (el && compareActive) showDelta(prefix+'_tCloseRate',ctpTCloseRate,cCtpTCloseRate,true);
+    el = document.getElementById(prefix+'_cCloseRate');
+    if (el && compareActive) showDelta(prefix+'_cCloseRate',ctpCCloseRate,cCtpCCloseRate,true);
+    el = document.getElementById(prefix+'_aov');
+    if (el && compareActive) showDelta(prefix+'_aov',aov,cAov);
+  }
 
   // Status chart
   const statusCounts = {};
