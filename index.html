@@ -692,6 +692,85 @@
         <canvas id="appPlatformChart" height="200"></canvas>
       </div>
 
+      <!-- Call Quality Breakdown -->
+      <div id="callQualitySection" style="display:none">
+        <div class="section-header">Call Quality Breakdown</div>
+        <div class="scorecard-row" style="grid-template-columns: repeat(7, 1fr);">
+          <div class="scorecard">
+            <div class="scorecard-label">Qualified Sales Calls</div>
+            <div class="scorecard-value" id="qualifiedCalls">—</div>
+            <div class="scorecard-change neutral" id="qualifiedCallsChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Qualified Showed</div>
+            <div class="scorecard-value" id="qualifiedShowed">—</div>
+            <div class="scorecard-change neutral" id="qualifiedShowedChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Show Rate</div>
+            <div class="scorecard-value" id="qualifiedShowRate">—</div>
+            <div class="scorecard-change neutral" id="qualifiedShowRateChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Pitched (Had Money)</div>
+            <div class="scorecard-value" id="pitchedTotal">—</div>
+            <div class="scorecard-change neutral" id="pitchedTotalChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Pitch Rate</div>
+            <div class="scorecard-value" id="pitchRate">—</div>
+            <div class="scorecard-change neutral" id="pitchRateChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Showed DQ'd</div>
+            <div class="scorecard-value" id="showedDqCount">—</div>
+            <div class="scorecard-change neutral" id="showedDqCountChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Showed DQ Rate</div>
+            <div class="scorecard-value" id="showedDqRate">—</div>
+            <div class="scorecard-change neutral" id="showedDqRateChange"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pitch Tracking — Organic vs Ads -->
+      <div id="pitchTrackingSection" style="display:none">
+        <div class="section-header">Pitch Tracking</div>
+        <div class="scorecard-row">
+          <div class="scorecard">
+            <div class="scorecard-label">Total Pitched (Organic)</div>
+            <div class="scorecard-value" id="pitchedOrganic">—</div>
+            <div class="scorecard-change neutral" id="pitchedOrganicChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Total Pitched (Ads)</div>
+            <div class="scorecard-value" id="pitchedAds">—</div>
+            <div class="scorecard-change neutral" id="pitchedAdsChange"></div>
+          </div>
+        </div>
+        <div class="chart-container" style="margin-top:12px;">
+          <div class="chart-title">Weekly Pitched — Organic vs Ads</div>
+          <canvas id="pitchWeeklyChart" height="200"></canvas>
+        </div>
+      </div>
+
+      <!-- Daily Calls Booked -->
+      <div id="dailyCallsSection" style="display:none">
+        <div class="section-header">Daily Calls Booked</div>
+        <div class="scorecard-row">
+          <div class="scorecard">
+            <div class="scorecard-label">Avg Calls Booked / Day</div>
+            <div class="scorecard-value" id="avgCallsPerDay">—</div>
+            <div class="scorecard-change neutral" id="avgCallsPerDayChange"></div>
+          </div>
+        </div>
+        <div class="chart-container" style="margin-top:12px;">
+          <div class="chart-title">Calls Booked Per Day (Triage + Sales)</div>
+          <canvas id="dailyCallsChart" height="200"></canvas>
+        </div>
+      </div>
+
       <!-- Sales Team Leaderboard -->
       <div class="chart-container" id="leaderboardContainer" style="display:none">
         <div class="chart-title">Sales Team Leaderboard</div>
@@ -794,70 +873,6 @@
       <div class="chart-container" id="bottleneckContainer" style="display:none">
         <div class="chart-title">Bottleneck Analysis</div>
         <div id="bottleneckContent" style="font-size:13px; line-height:1.6; color:var(--text-secondary);"></div>
-      </div>
-
-      <!-- Call Quality Breakdown -->
-      <div id="callQualitySection" style="display:none">
-        <div class="section-header">Call Quality Breakdown</div>
-        <div class="scorecard-row">
-          <div class="scorecard">
-            <div class="scorecard-label">Qualified Calls</div>
-            <div class="scorecard-value" id="qualifiedCalls">—</div>
-            <div class="scorecard-change neutral" id="qualifiedCallsChange"></div>
-          </div>
-          <div class="scorecard">
-            <div class="scorecard-label">Non-Qualified (DQ) Calls</div>
-            <div class="scorecard-value" id="dqCalls">—</div>
-            <div class="scorecard-change neutral" id="dqCallsChange"></div>
-          </div>
-          <div class="scorecard">
-            <div class="scorecard-label">Pitched (Had Money)</div>
-            <div class="scorecard-value" id="pitchedTotal">—</div>
-            <div class="scorecard-change neutral" id="pitchedTotalChange"></div>
-          </div>
-          <div class="scorecard">
-            <div class="scorecard-label">Pitch Rate</div>
-            <div class="scorecard-value" id="pitchRate">—</div>
-            <div class="scorecard-change neutral" id="pitchRateChange"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Pitch Tracking — Organic vs Ads -->
-      <div id="pitchTrackingSection" style="display:none">
-        <div class="section-header">Pitch Tracking</div>
-        <div class="scorecard-row">
-          <div class="scorecard">
-            <div class="scorecard-label">Total Pitched (Organic)</div>
-            <div class="scorecard-value" id="pitchedOrganic">—</div>
-            <div class="scorecard-change neutral" id="pitchedOrganicChange"></div>
-          </div>
-          <div class="scorecard">
-            <div class="scorecard-label">Total Pitched (Ads)</div>
-            <div class="scorecard-value" id="pitchedAds">—</div>
-            <div class="scorecard-change neutral" id="pitchedAdsChange"></div>
-          </div>
-        </div>
-        <div class="chart-container" style="margin-top:12px;">
-          <div class="chart-title">Weekly Pitched — Organic vs Ads</div>
-          <canvas id="pitchWeeklyChart" height="200"></canvas>
-        </div>
-      </div>
-
-      <!-- Daily Calls Booked -->
-      <div id="dailyCallsSection" style="display:none">
-        <div class="section-header">Daily Calls Booked</div>
-        <div class="scorecard-row">
-          <div class="scorecard">
-            <div class="scorecard-label">Avg Calls Booked / Day</div>
-            <div class="scorecard-value" id="avgCallsPerDay">—</div>
-            <div class="scorecard-change neutral" id="avgCallsPerDayChange"></div>
-          </div>
-        </div>
-        <div class="chart-container" style="margin-top:12px;">
-          <div class="chart-title">Calls Booked Per Day (Triage + Sales)</div>
-          <canvas id="dailyCallsChart" height="200"></canvas>
-        </div>
       </div>
 
       </div><!-- END page-mtd-overview -->
@@ -3326,51 +3341,58 @@ function computeAndRender() {
   document.getElementById('htdsAov').textContent = htdsAov > 0 ? '$' + htdsAov.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
 
   // === CALL QUALITY BREAKDOWN ===
-  // Build email -> result tag map from apps in date range
+  // Build email -> result tag map from ALL apps (not just date-filtered, since app may predate call)
   const appResultMap = {};
-  apps.forEach(r => {
+  appData.forEach(r => {
     const em = (r['Email'] || '').toString().toLowerCase();
     const rt = (r['Result Tag'] || '').toUpperCase();
     if (em) appResultMap[em] = rt;
   });
 
-  // Qualified calls: email maps to LQ or HQ app AND call status is NOT "Showed DQ"
-  const qualifiedCallsList = pastCalls.filter(row => {
+  // Qualified SALES calls only: email maps to LQ or HQ app, call type is sales
+  const qualifiedSalesCalls = pastSalesCalls.filter(row => {
     const em = (row['Email'] || '').toString().toLowerCase();
     const rt = appResultMap[em] || '';
-    const isQualifiedApp = rt.includes('LQ') || rt.includes('HQ');
-    const triageStatus = (row['Triage Status'] || '').toLowerCase();
-    const salesStatus = (row['Sales Call Status'] || '').toLowerCase();
-    const isShowedDQ = triageStatus === 'showed dq' || salesStatus === 'showed dq';
-    return isQualifiedApp && !isShowedDQ;
+    return rt.includes('LQ') || rt.includes('HQ');
   });
-  const qualifiedCallsCount = qualifiedCallsList.length;
+  const qualifiedSalesCount = qualifiedSalesCalls.length;
 
-  // DQ calls: email maps to DQ app OR call status is "Showed DQ"
-  const dqCallsList = pastCalls.filter(row => {
-    const em = (row['Email'] || '').toString().toLowerCase();
-    const rt = appResultMap[em] || '';
-    const isDQApp = rt.includes('DQ');
-    const triageStatus = (row['Triage Status'] || '').toLowerCase();
-    const salesStatus = (row['Sales Call Status'] || '').toLowerCase();
-    const isShowedDQ = triageStatus === 'showed dq' || salesStatus === 'showed dq';
-    return isDQApp || isShowedDQ;
+  // Qualified sales calls that showed (didShow but NOT Showed DQ)
+  const qualifiedShowedList = qualifiedSalesCalls.filter(row => {
+    const ss = (row['Sales Call Status'] || '').toLowerCase();
+    return didShow(ss) && ss !== 'showed dq';
   });
-  const dqCallsCount = dqCallsList.length;
+  const qualifiedShowedCount = qualifiedShowedList.length;
 
-  // Pitched = sales calls with status Showed C, Showed NC, or Follow Up
-  const pitchedList = pastSalesCalls.filter(r => wasPitched(r));
+  // Qualified show rate
+  const qualifiedShowRate = qualifiedSalesCount > 0 ? (qualifiedShowedCount / qualifiedSalesCount * 100) : 0;
+
+  // Pitched = qualified showed with status Showed C, Showed NC, or Follow Up
+  const pitchedList = qualifiedShowedList.filter(r => wasPitched(r));
   const pitchedCount = pitchedList.length;
 
-  // Pitch Rate = pitched / total sales calls that showed
-  const salesShowedCount = salesShowed.length;
-  const pitchRate = salesShowedCount > 0 ? (pitchedCount / salesShowedCount * 100) : 0;
+  // Pitch Rate = pitched / qualified showed
+  const pitchRate = qualifiedShowedCount > 0 ? (pitchedCount / qualifiedShowedCount * 100) : 0;
+
+  // Showed DQ'd = qualified sales calls where status is "Showed DQ"
+  const showedDqList = qualifiedSalesCalls.filter(row => {
+    const ss = (row['Sales Call Status'] || '').toLowerCase();
+    return ss === 'showed dq';
+  });
+  const showedDqCount = showedDqList.length;
+
+  // Showed DQ Rate = showed DQ / (qualified showed + showed DQ) — i.e. of everyone who showed up
+  const totalQualifiedShowed = qualifiedShowedCount + showedDqCount;
+  const showedDqRate = totalQualifiedShowed > 0 ? (showedDqCount / totalQualifiedShowed * 100) : 0;
 
   // Render Call Quality Breakdown
-  document.getElementById('qualifiedCalls').textContent = qualifiedCallsCount.toLocaleString();
-  document.getElementById('dqCalls').textContent = dqCallsCount.toLocaleString();
+  document.getElementById('qualifiedCalls').textContent = qualifiedSalesCount.toLocaleString();
+  document.getElementById('qualifiedShowed').textContent = qualifiedShowedCount.toLocaleString();
+  document.getElementById('qualifiedShowRate').textContent = qualifiedShowRate > 0 ? qualifiedShowRate.toFixed(1) + '%' : '—';
   document.getElementById('pitchedTotal').textContent = pitchedCount.toLocaleString();
   document.getElementById('pitchRate').textContent = pitchRate > 0 ? pitchRate.toFixed(1) + '%' : '—';
+  document.getElementById('showedDqCount').textContent = showedDqCount.toLocaleString();
+  document.getElementById('showedDqRate').textContent = showedDqRate > 0 ? showedDqRate.toFixed(1) + '%' : '—';
 
   // === PITCH TRACKING — ORGANIC vs ADS ===
   const pitchedOrganic = pitchedList.filter(r => isOrganic(r));
@@ -3448,39 +3470,35 @@ function computeAndRender() {
     showDelta('closeRate', closeRate, cCloseRate, true);
     showDelta('htdsAov', htdsAov, cHtdsAov);
 
-    // Call Quality Breakdown comparison
-    const cAppResultMap = {};
-    cApps.forEach(r => {
-      const em = (r['Email'] || '').toString().toLowerCase();
-      const rt = (r['Result Tag'] || '').toUpperCase();
-      if (em) cAppResultMap[em] = rt;
+    // Call Quality Breakdown comparison — use appResultMap (already built from all appData)
+    const cQualifiedSales = cPastSales.filter(row => {
+      const em = (row['Email'] || '').toString().toLowerCase();
+      const rt = appResultMap[em] || '';
+      return rt.includes('LQ') || rt.includes('HQ');
     });
-    const cQualifiedCalls = cPastCalls.filter(row => {
-      const em = (row['Email'] || '').toString().toLowerCase();
-      const rt = cAppResultMap[em] || '';
-      const isQApp = rt.includes('LQ') || rt.includes('HQ');
-      const ts = (row['Triage Status'] || '').toLowerCase();
+    const cQualifiedSalesCount = cQualifiedSales.length;
+    const cQualifiedShowed = cQualifiedSales.filter(row => {
       const ss = (row['Sales Call Status'] || '').toLowerCase();
-      return isQApp && ts !== 'showed dq' && ss !== 'showed dq';
-    }).length;
-    const cDqCalls = cPastCalls.filter(row => {
-      const em = (row['Email'] || '').toString().toLowerCase();
-      const rt = cAppResultMap[em] || '';
-      const ts = (row['Triage Status'] || '').toLowerCase();
-      const ss = (row['Sales Call Status'] || '').toLowerCase();
-      return rt.includes('DQ') || ts === 'showed dq' || ss === 'showed dq';
-    }).length;
-    const cPitched = cPastSales.filter(r => wasPitched(r)).length;
-    const cSalesShowedCount = cSalesShowed.length;
-    const cPitchRate = cSalesShowedCount > 0 ? (cPitched / cSalesShowedCount * 100) : 0;
+      return didShow(ss) && ss !== 'showed dq';
+    });
+    const cQualifiedShowedCount = cQualifiedShowed.length;
+    const cQualifiedShowRate = cQualifiedSalesCount > 0 ? (cQualifiedShowedCount / cQualifiedSalesCount * 100) : 0;
+    const cPitchedCount = cQualifiedShowed.filter(r => wasPitched(r)).length;
+    const cPitchRate = cQualifiedShowedCount > 0 ? (cPitchedCount / cQualifiedShowedCount * 100) : 0;
+    const cShowedDqCount = cQualifiedSales.filter(row => (row['Sales Call Status'] || '').toLowerCase() === 'showed dq').length;
+    const cTotalQShowed = cQualifiedShowedCount + cShowedDqCount;
+    const cShowedDqRate = cTotalQShowed > 0 ? (cShowedDqCount / cTotalQShowed * 100) : 0;
 
-    showDelta('qualifiedCalls', qualifiedCallsCount, cQualifiedCalls);
-    showDelta('dqCalls', dqCallsCount, cDqCalls);
-    showDelta('pitchedTotal', pitchedCount, cPitched);
+    showDelta('qualifiedCalls', qualifiedSalesCount, cQualifiedSalesCount);
+    showDelta('qualifiedShowed', qualifiedShowedCount, cQualifiedShowedCount);
+    showDelta('qualifiedShowRate', qualifiedShowRate, cQualifiedShowRate, true);
+    showDelta('pitchedTotal', pitchedCount, cPitchedCount);
     showDelta('pitchRate', pitchRate, cPitchRate, true);
+    showDelta('showedDqCount', showedDqCount, cShowedDqCount, false, true);
+    showDelta('showedDqRate', showedDqRate, cShowedDqRate, true, true);
 
     // Pitch Tracking comparison
-    const cPitchedList = cPastSales.filter(r => wasPitched(r));
+    const cPitchedList = cQualifiedShowed.filter(r => wasPitched(r));
     const cPitchedOrganic = cPitchedList.filter(r => isOrganic(r)).length;
     const cPitchedAds = cPitchedList.filter(r => isAds(r)).length;
     showDelta('pitchedOrganic', pitchedOrganicCount, cPitchedOrganic);
