@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CEO Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <style>
   :root {
     --bg-dark: #1a1f2e;
@@ -795,6 +796,70 @@
         <div id="bottleneckContent" style="font-size:13px; line-height:1.6; color:var(--text-secondary);"></div>
       </div>
 
+      <!-- Call Quality Breakdown -->
+      <div id="callQualitySection" style="display:none">
+        <div class="section-header">Call Quality Breakdown</div>
+        <div class="scorecard-row">
+          <div class="scorecard">
+            <div class="scorecard-label">Qualified Calls</div>
+            <div class="scorecard-value" id="qualifiedCalls">—</div>
+            <div class="scorecard-change neutral" id="qualifiedCallsChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Non-Qualified (DQ) Calls</div>
+            <div class="scorecard-value" id="dqCalls">—</div>
+            <div class="scorecard-change neutral" id="dqCallsChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Pitched (Had Money)</div>
+            <div class="scorecard-value" id="pitchedTotal">—</div>
+            <div class="scorecard-change neutral" id="pitchedTotalChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Pitch Rate</div>
+            <div class="scorecard-value" id="pitchRate">—</div>
+            <div class="scorecard-change neutral" id="pitchRateChange"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pitch Tracking — Organic vs Ads -->
+      <div id="pitchTrackingSection" style="display:none">
+        <div class="section-header">Pitch Tracking</div>
+        <div class="scorecard-row">
+          <div class="scorecard">
+            <div class="scorecard-label">Total Pitched (Organic)</div>
+            <div class="scorecard-value" id="pitchedOrganic">—</div>
+            <div class="scorecard-change neutral" id="pitchedOrganicChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Total Pitched (Ads)</div>
+            <div class="scorecard-value" id="pitchedAds">—</div>
+            <div class="scorecard-change neutral" id="pitchedAdsChange"></div>
+          </div>
+        </div>
+        <div class="chart-container" style="margin-top:12px;">
+          <div class="chart-title">Weekly Pitched — Organic vs Ads</div>
+          <canvas id="pitchWeeklyChart" height="200"></canvas>
+        </div>
+      </div>
+
+      <!-- Daily Calls Booked -->
+      <div id="dailyCallsSection" style="display:none">
+        <div class="section-header">Daily Calls Booked</div>
+        <div class="scorecard-row">
+          <div class="scorecard">
+            <div class="scorecard-label">Avg Calls Booked / Day</div>
+            <div class="scorecard-value" id="avgCallsPerDay">—</div>
+            <div class="scorecard-change neutral" id="avgCallsPerDayChange"></div>
+          </div>
+        </div>
+        <div class="chart-container" style="margin-top:12px;">
+          <div class="chart-title">Calls Booked Per Day (Triage + Sales)</div>
+          <canvas id="dailyCallsChart" height="200"></canvas>
+        </div>
+      </div>
+
       </div><!-- END page-mtd-overview -->
 
       <!-- ========== PAGE: YTD REV GOAL TRACKING ========== -->
@@ -1278,6 +1343,22 @@
       <!-- ======================== -->
       <div class="dashboard-page" id="page-mkt-overview" style="display:none;">
       <div class="page-header-row"><button class="export-btn" onclick="exportMarketingOverview()">Export CSV</button></div>
+
+        <!-- Filters -->
+        <div style="display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+          <select id="mkChannelFilter" class="filter-select" style="flex:1; min-width:140px; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); padding:8px 12px; border-radius:6px; font-size:13px;">
+            <option value="">Channel</option>
+          </select>
+          <select id="mkPlatformFilter" class="filter-select" style="flex:1; min-width:140px; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); padding:8px 12px; border-radius:6px; font-size:13px;">
+            <option value="">Platform</option>
+          </select>
+          <select id="mkFunnelFilter" class="filter-select" style="flex:1; min-width:140px; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); padding:8px 12px; border-radius:6px; font-size:13px;">
+            <option value="">Funnel</option>
+          </select>
+          <select id="mkLocationFilter" class="filter-select" style="flex:1; min-width:140px; background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); padding:8px 12px; border-radius:6px; font-size:13px;">
+            <option value="">Location</option>
+          </select>
+        </div>
 
         <!-- Row 1: Top-level funnel scorecards -->
         <div class="scorecard-row" style="grid-template-columns:repeat(9,1fr); margin-bottom:8px;">
@@ -1769,6 +1850,19 @@
         <div class="chart-container" style="padding:16px; margin-bottom:12px;">
           <div class="chart-title">Attribution & Team Performance Breakdown</div>
           <div id="sp_attributionTable"></div>
+        </div>
+
+        <!-- Call + Sales Attribution -->
+        <div class="chart-container" style="padding:16px; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div class="chart-title" style="margin:0;">Call + Sales Attribution</div>
+            <div style="display:flex; gap:4px;">
+              <button class="cr-attr-tab active" data-tab="platform" onclick="switchSpCallAttrTab('platform')">Platform</button>
+              <button class="cr-attr-tab" data-tab="funnel" onclick="switchSpCallAttrTab('funnel')">Funnel</button>
+              <button class="cr-attr-tab" data-tab="location" onclick="switchSpCallAttrTab('location')">Location</button>
+            </div>
+          </div>
+          <div id="sp_callAttrTable"></div>
         </div>
 
         <!-- 2 Charts Side-by-Side -->
@@ -2612,6 +2706,21 @@ function isDqApp(row) {
   return rt.includes('dq');
 }
 
+function wasPitched(row) {
+  const s = (row['Sales Call Status'] || '').toLowerCase();
+  return s === 'showed c' || s === 'showed nc' || s === 'follow up';
+}
+
+function isOrganic(row) {
+  const ch = (row['Channel'] || '').toLowerCase();
+  return ch === 'organic' || ch === 'referral' || ch === 'organic referral';
+}
+
+function isAds(row) {
+  const ch = (row['Channel'] || '').toLowerCase();
+  return ch.includes('ads') || ch.includes('paid') || ch === 'ad';
+}
+
 // ====================
 // CSV Export Utility
 // ====================
@@ -3183,7 +3292,7 @@ function computeAndRender() {
   // === RENDER ===
   document.getElementById('loadingIndicator').style.display = 'none';
 
-  ['pacingSection', 'actualsSection', 'appChartContainer', 'leaderboardContainer', 'notesContainer', 'targetReqContainer', 'bottleneckContainer'].forEach(id => {
+  ['pacingSection', 'actualsSection', 'appChartContainer', 'leaderboardContainer', 'notesContainer', 'targetReqContainer', 'bottleneckContainer', 'callQualitySection', 'pitchTrackingSection', 'dailyCallsSection'].forEach(id => {
     document.getElementById(id).style.display = 'block';
   });
 
@@ -3215,6 +3324,71 @@ function computeAndRender() {
   document.getElementById('salesShowRate').textContent = salesShowRate.toFixed(1) + '%';
   document.getElementById('closeRate').textContent = closeRate > 0 ? closeRate.toFixed(1) + '%' : '—';
   document.getElementById('htdsAov').textContent = htdsAov > 0 ? '$' + htdsAov.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
+
+  // === CALL QUALITY BREAKDOWN ===
+  // Build email -> result tag map from apps in date range
+  const appResultMap = {};
+  apps.forEach(r => {
+    const em = (r['Email'] || '').toString().toLowerCase();
+    const rt = (r['Result Tag'] || '').toUpperCase();
+    if (em) appResultMap[em] = rt;
+  });
+
+  // Qualified calls: email maps to LQ or HQ app AND call status is NOT "Showed DQ"
+  const qualifiedCallsList = pastCalls.filter(row => {
+    const em = (row['Email'] || '').toString().toLowerCase();
+    const rt = appResultMap[em] || '';
+    const isQualifiedApp = rt.includes('LQ') || rt.includes('HQ');
+    const triageStatus = (row['Triage Status'] || '').toLowerCase();
+    const salesStatus = (row['Sales Call Status'] || '').toLowerCase();
+    const isShowedDQ = triageStatus === 'showed dq' || salesStatus === 'showed dq';
+    return isQualifiedApp && !isShowedDQ;
+  });
+  const qualifiedCallsCount = qualifiedCallsList.length;
+
+  // DQ calls: email maps to DQ app OR call status is "Showed DQ"
+  const dqCallsList = pastCalls.filter(row => {
+    const em = (row['Email'] || '').toString().toLowerCase();
+    const rt = appResultMap[em] || '';
+    const isDQApp = rt.includes('DQ');
+    const triageStatus = (row['Triage Status'] || '').toLowerCase();
+    const salesStatus = (row['Sales Call Status'] || '').toLowerCase();
+    const isShowedDQ = triageStatus === 'showed dq' || salesStatus === 'showed dq';
+    return isDQApp || isShowedDQ;
+  });
+  const dqCallsCount = dqCallsList.length;
+
+  // Pitched = sales calls with status Showed C, Showed NC, or Follow Up
+  const pitchedList = pastSalesCalls.filter(r => wasPitched(r));
+  const pitchedCount = pitchedList.length;
+
+  // Pitch Rate = pitched / total sales calls that showed
+  const salesShowedCount = salesShowed.length;
+  const pitchRate = salesShowedCount > 0 ? (pitchedCount / salesShowedCount * 100) : 0;
+
+  // Render Call Quality Breakdown
+  document.getElementById('qualifiedCalls').textContent = qualifiedCallsCount.toLocaleString();
+  document.getElementById('dqCalls').textContent = dqCallsCount.toLocaleString();
+  document.getElementById('pitchedTotal').textContent = pitchedCount.toLocaleString();
+  document.getElementById('pitchRate').textContent = pitchRate > 0 ? pitchRate.toFixed(1) + '%' : '—';
+
+  // === PITCH TRACKING — ORGANIC vs ADS ===
+  const pitchedOrganic = pitchedList.filter(r => isOrganic(r));
+  const pitchedAds = pitchedList.filter(r => isAds(r));
+  const pitchedOrganicCount = pitchedOrganic.length;
+  const pitchedAdsCount = pitchedAds.length;
+
+  document.getElementById('pitchedOrganic').textContent = pitchedOrganicCount.toLocaleString();
+  document.getElementById('pitchedAds').textContent = pitchedAdsCount.toLocaleString();
+
+  // Weekly pitch chart (organic vs ads stacked)
+  renderPitchWeeklyChart(pitchedList);
+
+  // === DAILY CALLS BOOKED ===
+  const avgCallsPerDay = daysSoFar > 0 ? calls.length / daysSoFar : 0;
+  document.getElementById('avgCallsPerDay').textContent = avgCallsPerDay.toFixed(1);
+
+  renderDailyCallsChart(calls);
 
   // Store metrics globally for target requirements and bottleneck analysis
   window._metrics = {
@@ -3273,6 +3447,49 @@ function computeAndRender() {
     showDelta('salesShowRate', salesShowRate, cSalesShowRate, true);
     showDelta('closeRate', closeRate, cCloseRate, true);
     showDelta('htdsAov', htdsAov, cHtdsAov);
+
+    // Call Quality Breakdown comparison
+    const cAppResultMap = {};
+    cApps.forEach(r => {
+      const em = (r['Email'] || '').toString().toLowerCase();
+      const rt = (r['Result Tag'] || '').toUpperCase();
+      if (em) cAppResultMap[em] = rt;
+    });
+    const cQualifiedCalls = cPastCalls.filter(row => {
+      const em = (row['Email'] || '').toString().toLowerCase();
+      const rt = cAppResultMap[em] || '';
+      const isQApp = rt.includes('LQ') || rt.includes('HQ');
+      const ts = (row['Triage Status'] || '').toLowerCase();
+      const ss = (row['Sales Call Status'] || '').toLowerCase();
+      return isQApp && ts !== 'showed dq' && ss !== 'showed dq';
+    }).length;
+    const cDqCalls = cPastCalls.filter(row => {
+      const em = (row['Email'] || '').toString().toLowerCase();
+      const rt = cAppResultMap[em] || '';
+      const ts = (row['Triage Status'] || '').toLowerCase();
+      const ss = (row['Sales Call Status'] || '').toLowerCase();
+      return rt.includes('DQ') || ts === 'showed dq' || ss === 'showed dq';
+    }).length;
+    const cPitched = cPastSales.filter(r => wasPitched(r)).length;
+    const cSalesShowedCount = cSalesShowed.length;
+    const cPitchRate = cSalesShowedCount > 0 ? (cPitched / cSalesShowedCount * 100) : 0;
+
+    showDelta('qualifiedCalls', qualifiedCallsCount, cQualifiedCalls);
+    showDelta('dqCalls', dqCallsCount, cDqCalls);
+    showDelta('pitchedTotal', pitchedCount, cPitched);
+    showDelta('pitchRate', pitchRate, cPitchRate, true);
+
+    // Pitch Tracking comparison
+    const cPitchedList = cPastSales.filter(r => wasPitched(r));
+    const cPitchedOrganic = cPitchedList.filter(r => isOrganic(r)).length;
+    const cPitchedAds = cPitchedList.filter(r => isAds(r)).length;
+    showDelta('pitchedOrganic', pitchedOrganicCount, cPitchedOrganic);
+    showDelta('pitchedAds', pitchedAdsCount, cPitchedAds);
+
+    // Daily Calls comparison
+    const cDaysSoFar = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
+    const cAvgCallsPerDay = cDaysSoFar > 0 ? cCalls.length / cDaysSoFar : 0;
+    showDelta('avgCallsPerDay', avgCallsPerDay, cAvgCallsPerDay);
   }
 
   // Charts
@@ -3393,6 +3610,132 @@ function renderRevByTypeChart(salesCalls1C, salesCalls2C) {
       responsive: true,
       plugins: {
         legend: { position: 'bottom', labels: { color: '#e8eaf0', font: { size: 11 }, padding: 12 } }
+      }
+    }
+  });
+}
+
+function renderPitchWeeklyChart(pitchedList) {
+  // Group pitched calls by ISO week, split organic vs ads
+  const weekMap = {};
+  pitchedList.forEach(row => {
+    const d = getDateField(row, ['Date Created', 'Date Scheduled']);
+    if (!d) return;
+    // Get Monday of that week
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d);
+    monday.setDate(diff);
+    const weekLabel = monday.toISOString().split('T')[0];
+    if (!weekMap[weekLabel]) weekMap[weekLabel] = { organic: 0, ads: 0, other: 0 };
+    if (isOrganic(row)) weekMap[weekLabel].organic++;
+    else if (isAds(row)) weekMap[weekLabel].ads++;
+    else weekMap[weekLabel].other++;
+  });
+
+  const weeks = Object.keys(weekMap).sort();
+  const organicData = weeks.map(w => weekMap[w].organic);
+  const adsData = weeks.map(w => weekMap[w].ads);
+  const otherData = weeks.map(w => weekMap[w].other);
+
+  if (chartInstances.pitchWeekly) chartInstances.pitchWeekly.destroy();
+
+  const datasets = [
+    { label: 'Organic', data: organicData, backgroundColor: '#4ec9b0', borderWidth: 0 },
+    { label: 'Ads', data: adsData, backgroundColor: '#3b82f6', borderWidth: 0 }
+  ];
+  // Only include "Other" if there are any
+  if (otherData.some(v => v > 0)) {
+    datasets.push({ label: 'Other', data: otherData, backgroundColor: '#8b5cf6', borderWidth: 0 });
+  }
+
+  chartInstances.pitchWeekly = new Chart(document.getElementById('pitchWeeklyChart'), {
+    type: 'bar',
+    data: {
+      labels: weeks.map(w => {
+        const dt = new Date(w + 'T12:00:00');
+        return 'Wk ' + dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }),
+      datasets
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { stacked: true, ticks: { color: '#8b92a5', font: { size: 10 } }, grid: { color: '#2d3348' } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: '#8b92a5', stepSize: 1 }, grid: { color: '#2d3348' } }
+      },
+      plugins: {
+        legend: { labels: { color: '#e8eaf0', font: { size: 11 } }, position: 'top' }
+      }
+    }
+  });
+}
+
+function renderDailyCallsChart(calls) {
+  // Group calls by Date Created, split triage vs sales
+  const dayMap = {};
+  calls.forEach(row => {
+    const d = getDateField(row, ['Date Created']);
+    if (!d) return;
+    const dateStr = d.toISOString().split('T')[0];
+    if (!dayMap[dateStr]) dayMap[dateStr] = { triage: 0, sales: 0 };
+    const ct = (row['Call Type'] || '').toLowerCase();
+    if (ct.includes('triage')) dayMap[dateStr].triage++;
+    else if (ct.includes('sales')) dayMap[dateStr].sales++;
+  });
+
+  const dates = Object.keys(dayMap).sort();
+  const triageData = dates.map(d => dayMap[d].triage);
+  const salesData2 = dates.map(d => dayMap[d].sales);
+
+  if (chartInstances.dailyCalls) chartInstances.dailyCalls.destroy();
+
+  chartInstances.dailyCalls = new Chart(document.getElementById('dailyCallsChart'), {
+    type: 'bar',
+    data: {
+      labels: dates.map(d => {
+        const dt = new Date(d + 'T12:00:00');
+        return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }),
+      datasets: [
+        { label: 'Triage Calls', data: triageData, backgroundColor: '#4ec9b0', borderWidth: 0 },
+        { label: 'Sales Calls', data: salesData2, backgroundColor: '#3b82f6', borderWidth: 0 }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { stacked: true, ticks: { color: '#8b92a5', font: { size: 10 } }, grid: { color: '#2d3348' } },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: { color: '#8b92a5', stepSize: 1 },
+          grid: { color: '#2d3348' }
+        }
+      },
+      plugins: {
+        legend: { labels: { color: '#e8eaf0', font: { size: 11 } }, position: 'top' },
+        annotation: {
+          annotations: {
+            targetLine: {
+              type: 'line',
+              yMin: 10,
+              yMax: 10,
+              borderColor: '#f59e0b',
+              borderWidth: 2,
+              borderDash: [6, 4],
+              label: {
+                display: true,
+                content: 'Target: 10-15/day',
+                position: 'end',
+                backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                color: '#fff',
+                font: { size: 10, weight: 'bold' },
+                padding: 4
+              }
+            }
+          }
+        }
       }
     }
   });
@@ -6483,12 +6826,52 @@ function switchMkCallTab(tab) {
   renderMkCallAttr();
 }
 
+function populateMkFilters() {
+  const fields = [
+    {id:'mkChannelFilter', key:'Channel'},
+    {id:'mkPlatformFilter', key:'Platform'},
+    {id:'mkFunnelFilter', key:'Funnel'},
+    {id:'mkLocationFilter', key:'Location'}
+  ];
+  // Gather unique values from all 3 data sources
+  fields.forEach(({id, key}) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const vals = new Set();
+    appData.forEach(r => { const v = r[key]; if (v) vals.add(v.toString().trim()); });
+    callData.forEach(r => { const v = r[key]; if (v) vals.add(v.toString().trim()); });
+    salesData.forEach(r => { const v = r[key]; if (v) vals.add(v.toString().trim()); });
+    const sorted = [...vals].sort();
+    const current = sel.value;
+    sel.innerHTML = '<option value="">' + key + '</option>';
+    sorted.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o); });
+    sel.value = current;
+    sel.onchange = () => renderMarketingOverview();
+  });
+}
+
+function getMkFiltered(data) {
+  const ch = (document.getElementById('mkChannelFilter')||{}).value || '';
+  const pl = (document.getElementById('mkPlatformFilter')||{}).value || '';
+  const fn = (document.getElementById('mkFunnelFilter')||{}).value || '';
+  const lo = (document.getElementById('mkLocationFilter')||{}).value || '';
+  if (!ch && !pl && !fn && !lo) return data;
+  return data.filter(r => {
+    if (ch && (r['Channel']||'').toString().trim() !== ch) return false;
+    if (pl && (r['Platform']||'').toString().trim() !== pl) return false;
+    if (fn && (r['Funnel']||'').toString().trim() !== fn) return false;
+    if (lo && (r['Location']||'').toString().trim() !== lo) return false;
+    return true;
+  });
+}
+
 function renderMarketingOverview() {
   if (!appData || !callData || !salesData) return;
+  populateMkFilters();
 
-  const allApps = filterByDate(appData, ['Date Submitted']);
-  const allCalls = filterByDate(callData, ['Date Created']);
-  const sales = filterByDate(salesData, ['Date']);
+  const allApps = getMkFiltered(filterByDate(appData, ['Date Submitted']));
+  const allCalls = getMkFiltered(filterByDate(callData, ['Date Created']));
+  const sales = getMkFiltered(filterByDate(salesData, ['Date']));
   const today = new Date(); today.setHours(23, 59, 59, 999);
 
   // --- DQ filter helpers (using global isDqApp/isDqCall) ---
@@ -6781,7 +7164,7 @@ function renderMarketingOverview() {
 }
 
 function renderMkAppAttr() {
-  const allApps = filterByDate(appData, ['Date Submitted']);
+  const allApps = getMkFiltered(filterByDate(appData, ['Date Submitted']));
   // Universal DQ filter — exclude DQ'd apps from attribution
   const apps = (allApps || []).filter(r => {
     const rt = (r['Result Tag'] || '').toLowerCase();
@@ -6819,8 +7202,8 @@ function renderMkAppAttr() {
 }
 
 function renderMkCallAttr() {
-  const allCalls = filterByDate(callData, ['Date Created']);
-  const sales = filterByDate(salesData, ['Date']);
+  const allCalls = getMkFiltered(filterByDate(callData, ['Date Created']));
+  const sales = getMkFiltered(filterByDate(salesData, ['Date']));
   // Universal DQ filter — exclude DQ'd calls from attribution
   const dqStatuses = ['dq', 'rescheduled', 'duplicate', 'showed dq', 'invalid', 'cancelled dq'];
   const calls = (allCalls || []).filter(r => {
@@ -8021,8 +8404,84 @@ function renderSalesCallPerformance() {
   el = document.getElementById('sp_attributionTable');
   if (el) el.innerHTML = html;
 
+  // Call + Sales Attribution table
+  renderSpCallAttr();
+
   // Notes
   renderNotesForPage('sp_notesTable');
+}
+
+// ====================
+// Sales Call Performance — Call + Sales Attribution Table
+// ====================
+let _spCallAttrTab = 'platform';
+function switchSpCallAttrTab(tab) {
+  _spCallAttrTab = tab;
+  const container = document.querySelector('#page-sales-perf .chart-container:has(#sp_callAttrTable)');
+  if (container) container.querySelectorAll('.cr-attr-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  renderSpCallAttr();
+}
+
+function renderSpCallAttr() {
+  const allCalls = getCallFiltered('sp', filterByDate(callData, ['Date Created']));
+  const sales = filterByDate(salesData, ['Date']);
+  const calls = (allCalls || []).filter(r => !isDqCall(r));
+  const salesCalls = calls.filter(r => { const ct = (r['Call Type']||'').toLowerCase(); return ct.includes('1c sales') || ct.includes('2c sales'); });
+  if (!salesCalls.length) { const el = document.getElementById('sp_callAttrTable'); if (el) el.innerHTML = '<p style="color:var(--text-muted); text-align:center;">No data</p>'; return; }
+
+  const fieldMap = { platform:'Platform', funnel:'Funnel', location:'Location' };
+  const field = fieldMap[_spCallAttrTab] || 'Platform';
+  const today = new Date(); today.setHours(23,59,59,999);
+
+  const buckets = {};
+  calls.forEach(row => {
+    const key = (row[field]||'Unknown').toString().trim()||'Unknown';
+    const ct = (row['Call Type']||'').toLowerCase();
+    if (!buckets[key]) buckets[key] = { triage:0, sales:0, showed:0, closed:0, newRev:0 };
+    if (ct.includes('triage')) buckets[key].triage++;
+    else if (ct.includes('1c sales') || ct.includes('2c sales')) buckets[key].sales++;
+  });
+
+  // Close rates from past sales calls
+  const pastCalls = calls.filter(r => { const d = getDateField(r,['Date Scheduled']); return !d || d <= today; });
+  Object.keys(buckets).forEach(key => {
+    const keySalesCalls = pastCalls.filter(r => {
+      const ct = (r['Call Type']||'').toLowerCase();
+      const k = (r[field]||'Unknown').toString().trim()||'Unknown';
+      return k === key && (ct.includes('1c sales') || ct.includes('2c sales'));
+    });
+    const showed = keySalesCalls.filter(r => didShow(r['Sales Call Status']||''));
+    const closed = showed.filter(r => (r['Sales Call Status']||'').toLowerCase() === 'showed c');
+    buckets[key].showed = showed.length;
+    buckets[key].closed = closed.length;
+  });
+
+  // Revenue per bucket from Sales_Log
+  sales.forEach(row => {
+    const key = (row[field]||'Unknown').toString().trim()||'Unknown';
+    const tt = (row['Transaction Type']||'').toLowerCase();
+    if (tt.includes('refund')) return;
+    const amt = parseFloat(row['Amount'])||0;
+    if (!buckets[key]) buckets[key] = { triage:0, sales:0, showed:0, closed:0, newRev:0 };
+    buckets[key].newRev += amt;
+  });
+
+  const sorted = Object.entries(buckets).sort((a,b) => b[1].sales - a[1].sales);
+  let totalT=0, totalS=0, totalShowed=0, totalClosed=0, totalNR=0;
+  sorted.forEach(([,v]) => { totalT += v.triage; totalS += v.sales; totalShowed += v.showed; totalClosed += v.closed; totalNR += v.newRev; });
+
+  const fmt = v => '$' + v.toLocaleString(undefined,{maximumFractionDigits:0});
+  let html = '<table class="attr-breakdown-table"><thead><tr><th>'+field+'</th><th>Triage Calls</th><th>Sales Calls</th><th>[C] Close Rate</th><th>Revenue</th><th>AOV</th></tr></thead><tbody>';
+  sorted.forEach(([key,v]) => {
+    const cr = v.showed > 0 ? (v.closed/v.showed*100).toFixed(1)+'%' : 'N/A';
+    const aov = v.closed > 0 ? fmt(v.newRev/v.closed) : 'N/A';
+    html += '<tr><td>'+key+'</td><td>'+v.triage+'</td><td>'+v.sales+'</td><td>'+cr+'</td><td>'+fmt(v.newRev)+'</td><td>'+aov+'</td></tr>';
+  });
+  const totalCR = totalShowed > 0 ? (totalClosed/totalShowed*100).toFixed(1)+'%' : '';
+  html += '<tr style="font-weight:600; border-top:2px solid var(--border-color);"><td>Grand total</td><td>'+totalT+'</td><td>'+totalS+'</td><td>'+totalCR+'</td><td>'+fmt(totalNR)+'</td><td></td></tr>';
+  html += '</tbody></table>';
+  const el = document.getElementById('sp_callAttrTable');
+  if (el) el.innerHTML = html;
 }
 
 // ====================
