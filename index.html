@@ -746,14 +746,14 @@
             <div class="scorecard-change neutral" id="showedDqRateChange"></div>
           </div>
           <div class="scorecard">
-            <div class="scorecard-label">1C Close Rate</div>
-            <div class="scorecard-value" id="qb1cCloseRate">—</div>
-            <div class="scorecard-change neutral" id="qb1cCloseRateChange"></div>
+            <div class="scorecard-label">1C Sales Show Rate</div>
+            <div class="scorecard-value" id="qb1cShowRate">—</div>
+            <div class="scorecard-change neutral" id="qb1cShowRateChange"></div>
           </div>
           <div class="scorecard">
-            <div class="scorecard-label">2C Close Rate</div>
-            <div class="scorecard-value" id="qb2cCloseRate">—</div>
-            <div class="scorecard-change neutral" id="qb2cCloseRateChange"></div>
+            <div class="scorecard-label">2C Sales Show Rate</div>
+            <div class="scorecard-value" id="qb2cShowRate">—</div>
+            <div class="scorecard-change neutral" id="qb2cShowRateChange"></div>
           </div>
           <div class="scorecard">
             <div class="scorecard-label">Pitched Close Rate</div>
@@ -3418,17 +3418,15 @@ function computeAndRender() {
   const totalShowedAllCount = totalQualifiedShowed;
   const totalShowRateAll = qualifiedSalesCount > 0 ? (totalShowedAllCount / qualifiedSalesCount * 100) : 0;
 
-  // 1C Close Rate = Showed C on 1C / total 1C that showed
+  // 1C Show Rate = 1C qualified that showed / total 1C qualified
   const qualified1C = qualifiedSalesCalls.filter(r => (r['Call Type'] || '').includes('1C Sales'));
   const qualified1CShowed = qualified1C.filter(r => didShow(r['Sales Call Status'] || ''));
-  const qualified1CClosed = qualified1CShowed.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
-  const qb1cCloseRate = qualified1CShowed.length > 0 ? (qualified1CClosed.length / qualified1CShowed.length * 100) : 0;
+  const qb1cShowRate = qualified1C.length > 0 ? (qualified1CShowed.length / qualified1C.length * 100) : 0;
 
-  // 2C Close Rate = Showed C on 2C / total 2C that showed
+  // 2C Show Rate = 2C qualified that showed / total 2C qualified
   const qualified2C = qualifiedSalesCalls.filter(r => (r['Call Type'] || '').includes('2C Sales'));
   const qualified2CShowed = qualified2C.filter(r => didShow(r['Sales Call Status'] || ''));
-  const qualified2CClosed = qualified2CShowed.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
-  const qb2cCloseRate = qualified2CShowed.length > 0 ? (qualified2CClosed.length / qualified2CShowed.length * 100) : 0;
+  const qb2cShowRate = qualified2C.length > 0 ? (qualified2CShowed.length / qualified2C.length * 100) : 0;
 
   // Pitched Close Rate = closed / pitched (of those who had money, how many closed)
   const pitchedClosed = pitchedList.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
@@ -3444,8 +3442,8 @@ function computeAndRender() {
   document.getElementById('pitchRate').textContent = pitchRate > 0 ? pitchRate.toFixed(1) + '%' : '—';
   document.getElementById('showedDqCount').textContent = showedDqCount.toLocaleString();
   document.getElementById('showedDqRate').textContent = showedDqRate > 0 ? showedDqRate.toFixed(1) + '%' : '—';
-  document.getElementById('qb1cCloseRate').textContent = qb1cCloseRate > 0 ? qb1cCloseRate.toFixed(1) + '%' : '—';
-  document.getElementById('qb2cCloseRate').textContent = qb2cCloseRate > 0 ? qb2cCloseRate.toFixed(1) + '%' : '—';
+  document.getElementById('qb1cShowRate').textContent = qb1cShowRate > 0 ? qb1cShowRate.toFixed(1) + '%' : '—';
+  document.getElementById('qb2cShowRate').textContent = qb2cShowRate > 0 ? qb2cShowRate.toFixed(1) + '%' : '—';
   document.getElementById('pitchedCloseRate').textContent = pitchedCloseRate > 0 ? pitchedCloseRate.toFixed(1) + '%' : '—';
 
   // === PITCH TRACKING — ORGANIC vs ADS ===
@@ -3544,15 +3542,13 @@ function computeAndRender() {
     const cShowedDqRate = cTotalQShowed > 0 ? (cShowedDqCount / cTotalQShowed * 100) : 0;
     const cTotalShowRateAll = cQualifiedSalesCount > 0 ? (cTotalQShowed / cQualifiedSalesCount * 100) : 0;
 
-    // 1C/2C close rates comparison
+    // 1C/2C show rates comparison
     const cQ1C = cQualifiedSales.filter(r => (r['Call Type'] || '').includes('1C Sales'));
     const cQ1CShowed = cQ1C.filter(r => didShow(r['Sales Call Status'] || ''));
-    const cQ1CClosed = cQ1CShowed.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
-    const cQb1cCloseRate = cQ1CShowed.length > 0 ? (cQ1CClosed.length / cQ1CShowed.length * 100) : 0;
+    const cQb1cShowRate = cQ1C.length > 0 ? (cQ1CShowed.length / cQ1C.length * 100) : 0;
     const cQ2C = cQualifiedSales.filter(r => (r['Call Type'] || '').includes('2C Sales'));
     const cQ2CShowed = cQ2C.filter(r => didShow(r['Sales Call Status'] || ''));
-    const cQ2CClosed = cQ2CShowed.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
-    const cQb2cCloseRate = cQ2CShowed.length > 0 ? (cQ2CClosed.length / cQ2CShowed.length * 100) : 0;
+    const cQb2cShowRate = cQ2C.length > 0 ? (cQ2CShowed.length / cQ2C.length * 100) : 0;
 
     // Pitched close rate comparison
     const cPitchedList2 = cQualifiedShowed.filter(r => wasPitched(r));
@@ -3568,8 +3564,8 @@ function computeAndRender() {
     showDelta('pitchRate', pitchRate, cPitchRate, true);
     showDelta('showedDqCount', showedDqCount, cShowedDqCount, false, true);
     showDelta('showedDqRate', showedDqRate, cShowedDqRate, true, true);
-    showDelta('qb1cCloseRate', qb1cCloseRate, cQb1cCloseRate, true);
-    showDelta('qb2cCloseRate', qb2cCloseRate, cQb2cCloseRate, true);
+    showDelta('qb1cShowRate', qb1cShowRate, cQb1cShowRate, true);
+    showDelta('qb2cShowRate', qb2cShowRate, cQb2cShowRate, true);
     showDelta('pitchedCloseRate', pitchedCloseRate, cPitchedCloseRate, true);
 
     // Pitch Tracking comparison
