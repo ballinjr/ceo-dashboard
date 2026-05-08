@@ -695,19 +695,31 @@
       <!-- Call Quality Breakdown -->
       <div id="callQualitySection" style="display:none">
         <div class="section-header">Call Quality Breakdown</div>
-        <div class="scorecard-row" style="grid-template-columns: repeat(7, 1fr);">
+        <div class="scorecard-row" style="grid-template-columns: repeat(4, 1fr);">
           <div class="scorecard">
             <div class="scorecard-label">Qualified Sales Calls</div>
             <div class="scorecard-value" id="qualifiedCalls">—</div>
             <div class="scorecard-change neutral" id="qualifiedCallsChange"></div>
           </div>
           <div class="scorecard">
+            <div class="scorecard-label">Total Showed (All)</div>
+            <div class="scorecard-value" id="totalShowedAll">—</div>
+            <div class="scorecard-change neutral" id="totalShowedAllChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Total Show Rate</div>
+            <div class="scorecard-value" id="totalShowRateAll">—</div>
+            <div class="scorecard-change neutral" id="totalShowRateAllChange"></div>
+          </div>
+          <div class="scorecard">
             <div class="scorecard-label">Qualified Showed</div>
             <div class="scorecard-value" id="qualifiedShowed">—</div>
             <div class="scorecard-change neutral" id="qualifiedShowedChange"></div>
           </div>
+        </div>
+        <div class="scorecard-row" style="grid-template-columns: repeat(4, 1fr);">
           <div class="scorecard">
-            <div class="scorecard-label">Show Rate</div>
+            <div class="scorecard-label">Qualified Show Rate</div>
             <div class="scorecard-value" id="qualifiedShowRate">—</div>
             <div class="scorecard-change neutral" id="qualifiedShowRateChange"></div>
           </div>
@@ -726,10 +738,27 @@
             <div class="scorecard-value" id="showedDqCount">—</div>
             <div class="scorecard-change neutral" id="showedDqCountChange"></div>
           </div>
+        </div>
+        <div class="scorecard-row" style="grid-template-columns: repeat(4, 1fr);">
           <div class="scorecard">
             <div class="scorecard-label">Showed DQ Rate</div>
             <div class="scorecard-value" id="showedDqRate">—</div>
             <div class="scorecard-change neutral" id="showedDqRateChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">1C Close Rate</div>
+            <div class="scorecard-value" id="qb1cCloseRate">—</div>
+            <div class="scorecard-change neutral" id="qb1cCloseRateChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">2C Close Rate</div>
+            <div class="scorecard-value" id="qb2cCloseRate">—</div>
+            <div class="scorecard-change neutral" id="qb2cCloseRateChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Pitched Close Rate</div>
+            <div class="scorecard-value" id="pitchedCloseRate">—</div>
+            <div class="scorecard-change neutral" id="pitchedCloseRateChange"></div>
           </div>
         </div>
       </div>
@@ -3385,14 +3414,39 @@ function computeAndRender() {
   const totalQualifiedShowed = qualifiedShowedCount + showedDqCount;
   const showedDqRate = totalQualifiedShowed > 0 ? (showedDqCount / totalQualifiedShowed * 100) : 0;
 
+  // Total Showed (qualified + DQ combined) — all sales calls that showed regardless of quality
+  const totalShowedAllCount = totalQualifiedShowed;
+  const totalShowRateAll = qualifiedSalesCount > 0 ? (totalShowedAllCount / qualifiedSalesCount * 100) : 0;
+
+  // 1C Close Rate = Showed C on 1C / total 1C that showed
+  const qualified1C = qualifiedSalesCalls.filter(r => (r['Call Type'] || '').includes('1C Sales'));
+  const qualified1CShowed = qualified1C.filter(r => didShow(r['Sales Call Status'] || ''));
+  const qualified1CClosed = qualified1CShowed.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
+  const qb1cCloseRate = qualified1CShowed.length > 0 ? (qualified1CClosed.length / qualified1CShowed.length * 100) : 0;
+
+  // 2C Close Rate = Showed C on 2C / total 2C that showed
+  const qualified2C = qualifiedSalesCalls.filter(r => (r['Call Type'] || '').includes('2C Sales'));
+  const qualified2CShowed = qualified2C.filter(r => didShow(r['Sales Call Status'] || ''));
+  const qualified2CClosed = qualified2CShowed.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
+  const qb2cCloseRate = qualified2CShowed.length > 0 ? (qualified2CClosed.length / qualified2CShowed.length * 100) : 0;
+
+  // Pitched Close Rate = closed / pitched (of those who had money, how many closed)
+  const pitchedClosed = pitchedList.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
+  const pitchedCloseRate = pitchedCount > 0 ? (pitchedClosed.length / pitchedCount * 100) : 0;
+
   // Render Call Quality Breakdown
   document.getElementById('qualifiedCalls').textContent = qualifiedSalesCount.toLocaleString();
+  document.getElementById('totalShowedAll').textContent = totalShowedAllCount.toLocaleString();
+  document.getElementById('totalShowRateAll').textContent = totalShowRateAll > 0 ? totalShowRateAll.toFixed(1) + '%' : '—';
   document.getElementById('qualifiedShowed').textContent = qualifiedShowedCount.toLocaleString();
   document.getElementById('qualifiedShowRate').textContent = qualifiedShowRate > 0 ? qualifiedShowRate.toFixed(1) + '%' : '—';
   document.getElementById('pitchedTotal').textContent = pitchedCount.toLocaleString();
   document.getElementById('pitchRate').textContent = pitchRate > 0 ? pitchRate.toFixed(1) + '%' : '—';
   document.getElementById('showedDqCount').textContent = showedDqCount.toLocaleString();
   document.getElementById('showedDqRate').textContent = showedDqRate > 0 ? showedDqRate.toFixed(1) + '%' : '—';
+  document.getElementById('qb1cCloseRate').textContent = qb1cCloseRate > 0 ? qb1cCloseRate.toFixed(1) + '%' : '—';
+  document.getElementById('qb2cCloseRate').textContent = qb2cCloseRate > 0 ? qb2cCloseRate.toFixed(1) + '%' : '—';
+  document.getElementById('pitchedCloseRate').textContent = pitchedCloseRate > 0 ? pitchedCloseRate.toFixed(1) + '%' : '—';
 
   // === PITCH TRACKING — ORGANIC vs ADS ===
   const pitchedOrganic = pitchedList.filter(r => isOrganic(r));
@@ -3488,14 +3542,35 @@ function computeAndRender() {
     const cShowedDqCount = cQualifiedSales.filter(row => (row['Sales Call Status'] || '').toLowerCase() === 'showed dq').length;
     const cTotalQShowed = cQualifiedShowedCount + cShowedDqCount;
     const cShowedDqRate = cTotalQShowed > 0 ? (cShowedDqCount / cTotalQShowed * 100) : 0;
+    const cTotalShowRateAll = cQualifiedSalesCount > 0 ? (cTotalQShowed / cQualifiedSalesCount * 100) : 0;
+
+    // 1C/2C close rates comparison
+    const cQ1C = cQualifiedSales.filter(r => (r['Call Type'] || '').includes('1C Sales'));
+    const cQ1CShowed = cQ1C.filter(r => didShow(r['Sales Call Status'] || ''));
+    const cQ1CClosed = cQ1CShowed.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
+    const cQb1cCloseRate = cQ1CShowed.length > 0 ? (cQ1CClosed.length / cQ1CShowed.length * 100) : 0;
+    const cQ2C = cQualifiedSales.filter(r => (r['Call Type'] || '').includes('2C Sales'));
+    const cQ2CShowed = cQ2C.filter(r => didShow(r['Sales Call Status'] || ''));
+    const cQ2CClosed = cQ2CShowed.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
+    const cQb2cCloseRate = cQ2CShowed.length > 0 ? (cQ2CClosed.length / cQ2CShowed.length * 100) : 0;
+
+    // Pitched close rate comparison
+    const cPitchedList2 = cQualifiedShowed.filter(r => wasPitched(r));
+    const cPitchedClosed = cPitchedList2.filter(r => (r['Sales Call Status'] || '').toLowerCase() === 'showed c');
+    const cPitchedCloseRate = cPitchedList2.length > 0 ? (cPitchedClosed.length / cPitchedList2.length * 100) : 0;
 
     showDelta('qualifiedCalls', qualifiedSalesCount, cQualifiedSalesCount);
+    showDelta('totalShowedAll', totalShowedAllCount, cTotalQShowed);
+    showDelta('totalShowRateAll', totalShowRateAll, cTotalShowRateAll, true);
     showDelta('qualifiedShowed', qualifiedShowedCount, cQualifiedShowedCount);
     showDelta('qualifiedShowRate', qualifiedShowRate, cQualifiedShowRate, true);
     showDelta('pitchedTotal', pitchedCount, cPitchedCount);
     showDelta('pitchRate', pitchRate, cPitchRate, true);
     showDelta('showedDqCount', showedDqCount, cShowedDqCount, false, true);
     showDelta('showedDqRate', showedDqRate, cShowedDqRate, true, true);
+    showDelta('qb1cCloseRate', qb1cCloseRate, cQb1cCloseRate, true);
+    showDelta('qb2cCloseRate', qb2cCloseRate, cQb2cCloseRate, true);
+    showDelta('pitchedCloseRate', pitchedCloseRate, cPitchedCloseRate, true);
 
     // Pitch Tracking comparison
     const cPitchedList = cQualifiedShowed.filter(r => wasPitched(r));
