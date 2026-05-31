@@ -763,6 +763,28 @@
         </div>
       </div>
 
+      <!-- Show Rate by Source (Outbound vs Inbound) -->
+      <div class="chart-container" style="padding:16px; margin-bottom:12px;">
+        <div class="section-header" style="font-size:14px; margin-bottom:12px;">Show Rate by Source</div>
+        <div class="scorecard-row" style="grid-template-columns: repeat(3, 1fr);">
+          <div class="scorecard">
+            <div class="scorecard-label">Inbound Show Rate</div>
+            <div class="scorecard-value" id="ob_inboundShowRate">—</div>
+            <div class="scorecard-change neutral" id="ob_inboundShowRateChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Outbound Show Rate</div>
+            <div class="scorecard-value" id="ob_outboundShowRate">—</div>
+            <div class="scorecard-change neutral" id="ob_outboundShowRateChange"></div>
+          </div>
+          <div class="scorecard">
+            <div class="scorecard-label">Blended Show Rate</div>
+            <div class="scorecard-value" id="ob_blendedShowRate">—</div>
+            <div class="scorecard-change neutral" id="ob_blendedShowRateChange"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Pitch Tracking — Organic vs Ads -->
       <div id="pitchTrackingSection" style="display:none">
         <div class="section-header">Pitch Tracking</div>
@@ -1405,7 +1427,8 @@
         </div>
 
         <!-- Row 1: Top-level funnel scorecards -->
-        <div class="scorecard-row" style="grid-template-columns:repeat(9,1fr); margin-bottom:8px;">
+        <div class="scorecard-row" style="grid-template-columns:repeat(10,1fr); margin-bottom:8px;">
+          <div class="scorecard"><div class="scorecard-label">Total Apps</div><div class="scorecard-value" id="mkTotalApps">—</div><div class="scorecard-change neutral" id="mkTotalAppsChange"></div></div>
           <div class="scorecard"><div class="scorecard-label">Unique Apps</div><div class="scorecard-value" id="mkApps">—</div></div>
           <div class="scorecard"><div class="scorecard-label">App-Triage %</div><div class="scorecard-value" id="mkAppTriage">—</div></div>
           <div class="scorecard"><div class="scorecard-label">Booked Triage</div><div class="scorecard-value" id="mkTriageBooked">—</div></div>
@@ -1764,6 +1787,28 @@
           </div>
         </div>
 
+        <!-- Show Rate by Source (Outbound vs Inbound) -->
+        <div class="chart-container" style="padding:16px; margin-bottom:12px;">
+          <div class="section-header" style="font-size:14px; margin-bottom:12px;">Show Rate by Source</div>
+          <div class="scorecard-row" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="scorecard">
+              <div class="scorecard-label">Inbound Show Rate</div>
+              <div class="scorecard-value" id="soOb_inboundShowRate">—</div>
+              <div class="scorecard-change neutral" id="soOb_inboundShowRateChange"></div>
+            </div>
+            <div class="scorecard">
+              <div class="scorecard-label">Outbound Show Rate</div>
+              <div class="scorecard-value" id="soOb_outboundShowRate">—</div>
+              <div class="scorecard-change neutral" id="soOb_outboundShowRateChange"></div>
+            </div>
+            <div class="scorecard">
+              <div class="scorecard-label">Blended Show Rate</div>
+              <div class="scorecard-value" id="soOb_blendedShowRate">—</div>
+              <div class="scorecard-change neutral" id="soOb_blendedShowRateChange"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Notes -->
         <div class="chart-container" style="padding:16px; margin-top:12px;">
           <div class="chart-title">Notes</div>
@@ -1890,6 +1935,28 @@
           <div class="scorecard"><div class="scorecard-label">[C] Close Rate</div><div class="scorecard-value" id="sp_cCloseRate">—</div></div>
         </div>
 
+        <!-- Show Rate by Source (Outbound vs Inbound) -->
+        <div class="chart-container" style="padding:16px; margin-bottom:12px;">
+          <div class="section-header" style="font-size:14px; margin-bottom:12px;">Show Rate by Source</div>
+          <div class="scorecard-row" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="scorecard">
+              <div class="scorecard-label">Inbound Show Rate</div>
+              <div class="scorecard-value" id="spOb_inboundShowRate">—</div>
+              <div class="scorecard-change neutral" id="spOb_inboundShowRateChange"></div>
+            </div>
+            <div class="scorecard">
+              <div class="scorecard-label">Outbound Show Rate</div>
+              <div class="scorecard-value" id="spOb_outboundShowRate">—</div>
+              <div class="scorecard-change neutral" id="spOb_outboundShowRateChange"></div>
+            </div>
+            <div class="scorecard">
+              <div class="scorecard-label">Blended Show Rate</div>
+              <div class="scorecard-value" id="spOb_blendedShowRate">—</div>
+              <div class="scorecard-change neutral" id="spOb_blendedShowRateChange"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Attribution & Team Performance Table -->
         <div class="chart-container" style="padding:16px; margin-bottom:12px;">
           <div class="chart-title">Attribution & Team Performance Breakdown</div>
@@ -1970,6 +2037,28 @@
           <div class="scorecard"><div class="scorecard-label">AOV</div><div class="scorecard-value" id="sp1c_aov">—</div></div>
           <div class="scorecard"><div class="scorecard-label">Deposits</div><div class="scorecard-value" id="sp1c_deposits">—</div></div>
           <div class="scorecard"><div class="scorecard-label">Deposit Close %</div><div class="scorecard-value" id="sp1c_depositCloseRate">—</div></div>
+        </div>
+
+        <!-- Show Rate by Source (Outbound vs Inbound) -->
+        <div class="chart-container" style="padding:16px; margin-bottom:12px;">
+          <div class="section-header" style="font-size:14px; margin-bottom:12px;">Show Rate by Source</div>
+          <div class="scorecard-row" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="scorecard">
+              <div class="scorecard-label">Inbound Show Rate</div>
+              <div class="scorecard-value" id="sp1cOb_inboundShowRate">—</div>
+              <div class="scorecard-change neutral" id="sp1cOb_inboundShowRateChange"></div>
+            </div>
+            <div class="scorecard">
+              <div class="scorecard-label">Outbound Show Rate</div>
+              <div class="scorecard-value" id="sp1cOb_outboundShowRate">—</div>
+              <div class="scorecard-change neutral" id="sp1cOb_outboundShowRateChange"></div>
+            </div>
+            <div class="scorecard">
+              <div class="scorecard-label">Blended Show Rate</div>
+              <div class="scorecard-value" id="sp1cOb_blendedShowRate">—</div>
+              <div class="scorecard-change neutral" id="sp1cOb_blendedShowRateChange"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Attribution & Team Performance Table -->
@@ -2765,6 +2854,48 @@ function isAds(row) {
   return ch.includes('ads') || ch.includes('paid') || ch === 'ad';
 }
 
+function isOutbound(row) {
+  return (row['Booked By'] || '').toLowerCase() === 'outbound';
+}
+
+// Compute show rates by source (outbound vs inbound)
+function computeSourceShowRates(salesCallList) {
+  const outbound = salesCallList.filter(r => isOutbound(r));
+  const inbound = salesCallList.filter(r => !isOutbound(r));
+  const all = salesCallList;
+
+  const outboundWithStatus = outbound.filter(r => r['Sales Call Status']);
+  const outboundShowed = outboundWithStatus.filter(r => didShow(r['Sales Call Status']));
+  const outboundShowRate = outboundWithStatus.length > 0 ? (outboundShowed.length / outboundWithStatus.length * 100) : 0;
+
+  const inboundWithStatus = inbound.filter(r => r['Sales Call Status']);
+  const inboundShowed = inboundWithStatus.filter(r => didShow(r['Sales Call Status']));
+  const inboundShowRate = inboundWithStatus.length > 0 ? (inboundShowed.length / inboundWithStatus.length * 100) : 0;
+
+  const allWithStatus = all.filter(r => r['Sales Call Status']);
+  const allShowed = allWithStatus.filter(r => didShow(r['Sales Call Status']));
+  const blendedShowRate = allWithStatus.length > 0 ? (allShowed.length / allWithStatus.length * 100) : 0;
+
+  return { inboundShowRate, outboundShowRate, blendedShowRate };
+}
+
+// Render show rates by source to DOM elements
+function renderSourceShowRates(prefix, rates) {
+  const el1 = document.getElementById(prefix + '_inboundShowRate');
+  if (el1) el1.textContent = rates.inboundShowRate > 0 ? rates.inboundShowRate.toFixed(1) + '%' : '—';
+  const el2 = document.getElementById(prefix + '_outboundShowRate');
+  if (el2) el2.textContent = rates.outboundShowRate > 0 ? rates.outboundShowRate.toFixed(1) + '%' : '—';
+  const el3 = document.getElementById(prefix + '_blendedShowRate');
+  if (el3) el3.textContent = rates.blendedShowRate > 0 ? rates.blendedShowRate.toFixed(1) + '%' : '—';
+}
+
+// Render comparison deltas for source show rates
+function renderSourceShowRateDeltas(prefix, current, compare) {
+  showDelta(prefix + '_inboundShowRate', current.inboundShowRate, compare.inboundShowRate, true);
+  showDelta(prefix + '_outboundShowRate', current.outboundShowRate, compare.outboundShowRate, true);
+  showDelta(prefix + '_blendedShowRate', current.blendedShowRate, compare.blendedShowRate, true);
+}
+
 // ====================
 // CSV Export Utility
 // ====================
@@ -3446,6 +3577,10 @@ function computeAndRender() {
   document.getElementById('qb2cShowRate').textContent = qb2cShowRate > 0 ? qb2cShowRate.toFixed(1) + '%' : '—';
   document.getElementById('pitchedCloseRate').textContent = pitchedCloseRate > 0 ? pitchedCloseRate.toFixed(1) + '%' : '—';
 
+  // === SHOW RATE BY SOURCE (Outbound vs Inbound) ===
+  const obRates = computeSourceShowRates(pastSalesCalls);
+  renderSourceShowRates('ob', obRates);
+
   // === PITCH TRACKING — ORGANIC vs ADS ===
   const pitchedOrganic = pitchedList.filter(r => isOrganic(r));
   const pitchedAds = pitchedList.filter(r => isAds(r));
@@ -3567,6 +3702,10 @@ function computeAndRender() {
     showDelta('qb1cShowRate', qb1cShowRate, cQb1cShowRate, true);
     showDelta('qb2cShowRate', qb2cShowRate, cQb2cShowRate, true);
     showDelta('pitchedCloseRate', pitchedCloseRate, cPitchedCloseRate, true);
+
+    // Source show rate deltas
+    const cObRates = computeSourceShowRates(cPastSales);
+    renderSourceShowRateDeltas('ob', obRates, cObRates);
 
     // Pitch Tracking comparison
     const cPitchedList = cQualifiedShowed.filter(r => wasPitched(r));
@@ -6014,7 +6153,18 @@ function renderApplicationOverview() {
 
   // === COMPARISON DELTAS ===
   if (compareActive) {
-    const cAppsData = filterByCompareDate(appData, ['Date Submitted']);
+    const cAppsDataRaw = filterByCompareDate(appData, ['Date Submitted']);
+    const aoCh = (document.getElementById('aoChannelFilter')||{}).value || '';
+    const aoPl = (document.getElementById('aoPlatformFilter')||{}).value || '';
+    const aoFn = (document.getElementById('aoFunnelFilter')||{}).value || '';
+    const aoLo = (document.getElementById('aoLocationFilter')||{}).value || '';
+    const cAppsData = cAppsDataRaw.filter(r => {
+      if (aoCh && (r['Channel'] || '') !== aoCh) return false;
+      if (aoPl && (r['Platform'] || '') !== aoPl) return false;
+      if (aoFn && (r['Funnel'] || '') !== aoFn) return false;
+      if (aoLo && (r['Location'] || '') !== aoLo) return false;
+      return true;
+    });
     const cEmailMap = {};
     cAppsData.forEach(r => {
       const e = (r['Email'] || '').toString().toLowerCase();
@@ -6979,7 +7129,8 @@ function renderMarketingOverview() {
     return scheduled <= today;
   });
 
-  // Unique apps by email (non-DQ)
+  // Total apps (all, including DQ) and Unique apps by email (non-DQ)
+  const totalAppsCount = allApps.length;
   const appEmails = new Set();
   apps.forEach(r => { const e = r['Email']; if (e) appEmails.add(e.toString().toLowerCase()); });
   const uniqueApps = appEmails.size;
@@ -7030,6 +7181,7 @@ function renderMarketingOverview() {
   const revPerTriage = bookedTriage > 0 ? (newRev / bookedTriage).toFixed(2) : '0';
   const revPerSales = bookedSales > 0 ? (newRev / bookedSales).toFixed(2) : '0';
 
+  document.getElementById('mkTotalApps').textContent = totalAppsCount.toLocaleString();
   document.getElementById('mkApps').textContent = uniqueApps;
   document.getElementById('mkAppTriage').textContent = appTriagePct;
   document.getElementById('mkTriageBooked').textContent = bookedTriage;
@@ -7049,9 +7201,9 @@ function renderMarketingOverview() {
 
   // === COMPARISON DELTAS ===
   if (compareActive) {
-    const cAllApps = filterByCompareDate(appData, ['Date Submitted']);
-    const cAllCalls = filterByCompareDate(callData, ['Date Created']);
-    const cSales = filterByCompareDate(salesData, ['Date']);
+    const cAllApps = getMkFiltered(filterByCompareDate(appData, ['Date Submitted']));
+    const cAllCalls = getMkFiltered(filterByCompareDate(callData, ['Date Created']));
+    const cSales = getMkFiltered(filterByCompareDate(salesData, ['Date']));
     const cApps = cAllApps.filter(r => !isDqApp(r));
     const cCalls = cAllCalls.filter(r => !isDqCall(r));
     const cPastCalls = cCalls.filter(row => { const scheduled = getDateField(row, ['Date Scheduled']); if (!scheduled) return true; return scheduled <= today; });
@@ -7088,6 +7240,7 @@ function renderMarketingOverview() {
     const cRevPerApp = cUniqueApps > 0 ? (cNewRev / cUniqueApps) : 0;
     const cRevPerTriage = cBookedTriage > 0 ? (cNewRev / cBookedTriage) : 0;
     const cRevPerSales = cBookedSales > 0 ? (cNewRev / cBookedSales) : 0;
+    showDelta('mkTotalApps',totalAppsCount,cAllApps.length);
     showDelta('mkApps',uniqueApps,cUniqueApps);
     showDelta('mkTriageBooked',bookedTriage,cBookedTriage);
     showDelta('mkSalesBooked',bookedSales,cBookedSales);
@@ -7107,7 +7260,7 @@ function renderMarketingOverview() {
 
   // App Volume by month (YTD)
   const appMonths = {};
-  appData.forEach(row => {
+  getMkFiltered(appData).forEach(row => {
     const d = getDateField(row, ['Date Submitted']);
     if (!d || d.getFullYear() !== curYear) return;
     const m = d.getMonth();
@@ -7149,7 +7302,7 @@ function renderMarketingOverview() {
 
   // Call Volume by month (YTD)
   const callMonths = {};
-  callData.forEach(row => {
+  getMkFiltered(callData).forEach(row => {
     const d = getDateField(row, ['Date Created']);
     if (!d || d.getFullYear() !== curYear) return;
     const m = d.getMonth();
@@ -7189,7 +7342,7 @@ function renderMarketingOverview() {
 
   // Revenue by month (YTD)
   const revMonths = {};
-  salesData.forEach(row => {
+  getMkFiltered(salesData).forEach(row => {
     const d = getDateField(row, ['Date']);
     if (!d || d.getFullYear() !== curYear) return;
     const m = d.getMonth();
@@ -7696,8 +7849,8 @@ function renderSalesOverview() {
 
   // === COMPARISON DELTAS (TRIAGE) ===
   if (compareActive) {
-    const cCalls = filterByCompareDate(callData, ['Date Created']);
-    const cSales = filterByCompareDate(salesData, ['Date']);
+    const cCalls = getCallFiltered('so', filterByCompareDate(callData, ['Date Created']));
+    const cSales = getCallFiltered('so', filterByCompareDate(salesData, ['Date']));
     const cToday = new Date(); cToday.setHours(23,59,59,999);
     const cPastCalls = cCalls.filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= cToday; });
     const cTriageCalls = cCalls.filter(r => (r['Call Type']||'').toLowerCase().includes('triage'));
@@ -7793,9 +7946,9 @@ function renderSalesOverview() {
 
   // === COMPARISON DELTAS (2C) ===
   if (compareActive) {
-    const c2CCalls = filterByCompareDate(callData, ['Date Created']).filter(r => (r['Call Type']||'').includes('2C Sales'));
+    const c2CCalls = getCallFiltered('so', filterByCompareDate(callData, ['Date Created'])).filter(r => (r['Call Type']||'').includes('2C Sales'));
     const c2CToday = new Date(); c2CToday.setHours(23,59,59,999);
-    const c2CPastCalls = filterByCompareDate(callData, ['Date Created']).filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= c2CToday; }).filter(r => (r['Call Type']||'').includes('2C Sales'));
+    const c2CPastCalls = getCallFiltered('so', filterByCompareDate(callData, ['Date Created'])).filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= c2CToday; }).filter(r => (r['Call Type']||'').includes('2C Sales'));
     function c2CCountBooked(list) {
       const seen = new Set(); let c=0;
       list.forEach(r => {
@@ -7878,11 +8031,16 @@ function renderSalesOverview() {
   el = document.getElementById('so1cTriageCloseRateDelta');
   if (el) el.innerHTML = '';
 
+  // === SHOW RATE BY SOURCE (moved before comparison so soObRates is available) ===
+  const allPastSalesForOb = [...pastSales1C, ...pastSales2C];
+  const soObRates = computeSourceShowRates(allPastSalesForOb);
+  renderSourceShowRates('soOb', soObRates);
+
   // === COMPARISON DELTAS (1C) ===
   if (compareActive) {
-    const c1CCalls = filterByCompareDate(callData, ['Date Created']).filter(r => (r['Call Type']||'').includes('1C Sales'));
+    const c1CCalls = getCallFiltered('so', filterByCompareDate(callData, ['Date Created'])).filter(r => (r['Call Type']||'').includes('1C Sales'));
     const c1CToday = new Date(); c1CToday.setHours(23,59,59,999);
-    const c1CPastCalls = filterByCompareDate(callData, ['Date Created']).filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= c1CToday; }).filter(r => (r['Call Type']||'').includes('1C Sales'));
+    const c1CPastCalls = getCallFiltered('so', filterByCompareDate(callData, ['Date Created'])).filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= c1CToday; }).filter(r => (r['Call Type']||'').includes('1C Sales'));
     function c1CCountBooked(list) {
       const seen = new Set(); let c=0;
       list.forEach(r => {
@@ -7905,6 +8063,13 @@ function renderSalesOverview() {
     showDelta('so1cShowRate',sales1CShowRate,c1CShowRate,true);
     showDelta('so1cNoShowRate',sales1CNoShowRate,c1CNoShowRate,true,true);
     showDelta('so1cTriageCloseRate',sales1CCloseRate,c1CCloseRate,true);
+
+    // Source show rate deltas (combined 1C + 2C)
+    const cSoAllCompareCalls = getCallFiltered('so', filterByCompareDate(callData, ['Date Created']));
+    const cSoAllComparePast = cSoAllCompareCalls.filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= new Date(new Date().setHours(23,59,59,999)); });
+    const cSoAllPastSales = cSoAllComparePast.filter(r => { const ct = r['Call Type']||''; return ct.includes('1C Sales') || ct.includes('2C Sales'); });
+    const cSoObRates = computeSourceShowRates(cSoAllPastSales);
+    renderSourceShowRateDeltas('soOb', soObRates, cSoObRates);
   }
 
   // 1C charts
@@ -8034,8 +8199,8 @@ function renderTriagePerformance() {
 
   // === COMPARISON DELTAS ===
   if (compareActive) {
-    const cCalls = filterByCompareDate(callData, ['Date Created']);
-    const cSalesData = filterByCompareDate(salesData, ['Date']);
+    const cCalls = getCallFiltered('tp', filterByCompareDate(callData, ['Date Created']));
+    const cSalesData = getCallFiltered('tp', filterByCompareDate(salesData, ['Date']));
     const cToday = new Date(); cToday.setHours(23,59,59,999);
     const cPastCalls = cCalls.filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= cToday; });
     const cTriageCalls = cCalls.filter(r => (r['Call Type']||'').toLowerCase().includes('triage'));
@@ -8300,10 +8465,14 @@ function renderSalesCallPerformance() {
   el = document.getElementById('sp_cCloseRate');
   if (el) el.textContent = spCCloseRate.toFixed(1) + '%';
 
+  // === SHOW RATE BY SOURCE ===
+  const spObRates = computeSourceShowRates(pastSales);
+  renderSourceShowRates('spOb', spObRates);
+
   // === COMPARISON DELTAS ===
   if (compareActive) {
-    const cCalls = filterByCompareDate(callData, ['Date Created']);
-    const cSalesData = filterByCompareDate(salesData, ['Date']);
+    const cCalls = getCallFiltered('sp', filterByCompareDate(callData, ['Date Created']));
+    const cSalesData = getCallFiltered('sp', filterByCompareDate(salesData, ['Date']));
     const cToday = new Date(); cToday.setHours(23,59,59,999);
     const cPastCalls = cCalls.filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= cToday; });
     const cSalesCalls = cCalls.filter(r => { const ct = r['Call Type']||''; return ct.includes('1C Sales') || ct.includes('2C Sales'); });
@@ -8341,6 +8510,10 @@ function renderSalesCallPerformance() {
     showDelta('sp_cCloseRate',spCCloseRate,cSpCCloseRate,true);
     showDelta('sp_tRevenuePerCall',tRevPerCall,cTRevPerCall);
     showDelta('sp_cRevenuePerCall',cRevPerCall,cCRevPerCall);
+
+    // Source show rate deltas
+    const cSpObRates = computeSourceShowRates(cPastSales);
+    renderSourceShowRateDeltas('spOb', spObRates, cSpObRates);
   }
 
   // Insights panel - 1C vs 2C comparison (last 12 months) — uses raw callData/salesData, NOT date-filtered
@@ -8658,10 +8831,14 @@ function renderCallTypePerformance(callTypeFilter, prefix) {
   el = document.getElementById(prefix+'_depositClosePct');
   if (el) el.textContent = '—';
 
+  // === SHOW RATE BY SOURCE ===
+  const ctObRates = computeSourceShowRates(pastTypeCalls);
+  renderSourceShowRates(prefix + 'Ob', ctObRates);
+
   // === COMPARISON DELTAS ===
   if (compareActive) {
-    const cCalls = filterByCompareDate(callData, ['Date Created']);
-    const cSalesData = filterByCompareDate(salesData, ['Date']);
+    const cCalls = getCallFiltered(prefix, filterByCompareDate(callData, ['Date Created']));
+    const cSalesData = getCallFiltered(prefix, filterByCompareDate(salesData, ['Date']));
     const cToday = new Date(); cToday.setHours(23,59,59,999);
     const cPastCalls = cCalls.filter(r => { const d = getDateField(r, ['Date Scheduled']); return !d || d <= cToday; });
     const cTypeCalls = cCalls.filter(r => (r['Call Type']||'').includes(callTypeFilter));
@@ -8703,6 +8880,10 @@ function renderCallTypePerformance(callTypeFilter, prefix) {
     if (el && compareActive) showDelta(prefix+'_cCloseRate',ctpCCloseRate,cCtpCCloseRate,true);
     el = document.getElementById(prefix+'_aov');
     if (el && compareActive) showDelta(prefix+'_aov',aov,cAov);
+
+    // Source show rate deltas
+    const cCtObRates = computeSourceShowRates(cPastTypeCalls);
+    renderSourceShowRateDeltas(prefix + 'Ob', ctObRates, cCtObRates);
   }
 
   // Status chart
