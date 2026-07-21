@@ -620,7 +620,7 @@
             <div class="scorecard-change neutral" id="unitsSoldPaceChange"></div>
           </div>
           <div class="scorecard">
-            <div class="scorecard-label">Monthly Pace Rev</div>
+            <div class="scorecard-label">MTD Paced Rev</div>
             <div class="scorecard-value" id="monthlyPaceRev">—</div>
             <div class="scorecard-change neutral" id="monthlyPaceRevChange"></div>
           </div>
@@ -2955,7 +2955,7 @@ function exportMTDOverview() {
     ['HT+DS AOV', m.htdsAov.toFixed(2)],
     ['Est Pipeline Revenue', m.estPipelineRev.toFixed(2)],
     ['Expected Payments This Month', m.expectedPaymentsThisMonth.toFixed(2)],
-    ['Monthly Pace Revenue', m.monthlyPaceRev.toFixed(2)],
+    ['MTD Paced Revenue', m.monthlyPaceRev.toFixed(2)],
     ['App Pace (projected)', Math.round(m.uniqueApps * m.paceMultiplier)],
     ['Triage Pace (projected)', Math.round(m.bookedTriage * m.paceMultiplier)],
     ['Sales Call Pace (projected)', Math.round(m.bookedSales * m.paceMultiplier)],
@@ -3406,19 +3406,42 @@ function computeAndRender() {
   const htdsAov = htdsUnits > 0 ? htdsRev / htdsUnits : 0;
 
   // Expected Payments — from "Expected Next Payment" and "Expected Next Payment Date" in Sales_Log
-  // Sum expected payments that fall within the current month
+  // IMPORTANT: each new payment adds a NEW row to Sales_Log, but the OLD row keeps its stale
+  // "Expected Next Payment". Only the LATEST row per email reflects the customer's current plan.
+  // Summing expectations from every row double-counts payments that were already collected
+  // (they appear in both collected revenue AND as "expected"). So:
+  //   1. Keep only the most recent Sales_Log row per email (by sale Date) — that expectation is "live".
+  //   2. Count it toward this month only if its due date is in the REMAINDER of the month
+  //      (due today or later). Past-due expectations are tracked separately as at-risk, not
+  //      assumed collected.
   const monthStart = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
   const monthEnd = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0, 23, 59, 59);
-  let expectedPaymentsThisMonth = 0;
+  const latestRowByEmail = new Map();
   salesData.forEach(row => {
-    const expAmt = parseFloat(row['Expected Next Payment']);
-    if (isNaN(expAmt) || expAmt <= 0) return;
-    const expDate = getDateField(row, ['Expected Next Payment Date']);
-    if (expDate && expDate >= monthStart && expDate <= monthEnd) {
-      expectedPaymentsThisMonth += expAmt;
+    const email = (row['Email'] || '').toString().trim().toLowerCase();
+    if (!email) return;
+    const d = getDateField(row, ['Date']);
+    if (!d) return;
+    const prev = latestRowByEmail.get(email);
+    if (!prev || d >= prev._saleDate) {
+      latestRowByEmail.set(email, { _saleDate: d, row });
     }
   });
-  // Est Pipeline Rev = actual collected + expected payments remaining this month
+  let expectedPaymentsThisMonth = 0;  // live expectations due in the remainder of this month
+  let pastDueExpectedThisMonth = 0;   // live expectations due earlier this month but not yet collected (at-risk)
+  latestRowByEmail.forEach(({ row }) => {
+    const expAmt = parseFloat((row['Expected Next Payment'] || '').toString().replace(/[$,]/g, ''));
+    if (isNaN(expAmt) || expAmt <= 0) return;
+    const expDate = getDateField(row, ['Expected Next Payment Date']);
+    if (!expDate || expDate < monthStart || expDate > monthEnd) return;
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (expDate >= todayStart) {
+      expectedPaymentsThisMonth += expAmt;
+    } else {
+      pastDueExpectedThisMonth += expAmt;
+    }
+  });
+  // Est Pipeline Rev = actual collected + live expected payments remaining this month
   const estPipelineRev = totalRev + expectedPaymentsThisMonth;
 
   // Triage Show Rate — uses pastTriageCalls (only calls already scheduled, not future)
@@ -3455,12 +3478,36 @@ function computeAndRender() {
   const triagePace = Math.round(bookedTriageCount * paceMultiplier);
   const salesCallPace = Math.round(bookedSalesCount * paceMultiplier);
   const unitsSoldPace = Math.round(unitsSold * paceMultiplier);
-  // Monthly Pace Rev = actual collected + expected payments for rest of month
-  // (rather than simple linear extrapolation, use real scheduled payments)
+  // Monthly Pace Rev = collected MTD
+  //                  + live scheduled payments due in the rest of the month
+  //                  + projected cash from NEW sales for the remaining days
+  // New-sale cash = revenue this month from customers whose FIRST-EVER sale is this month
+  // (recurring payment-plan collections from earlier months are already covered by the
+  //  scheduled-payments component, so only new-sale velocity gets extrapolated).
+  const firstSaleByEmail = new Map();
+  salesData.forEach(row => {
+    const email = (row['Email'] || '').toString().trim().toLowerCase();
+    if (!email) return;
+    const d = getDateField(row, ['Date']);
+    if (!d) return;
+    const prev = firstSaleByEmail.get(email);
+    if (!prev || d < prev) firstSaleByEmail.set(email, d);
+  });
+  let newSaleCashMTD = 0;
+  sales.forEach(row => {
+    const email = (row['Email'] || '').toString().trim().toLowerCase();
+    const first = firstSaleByEmail.get(email);
+    if (first && first >= monthStart) {
+      const amt = parseFloat(row['Amount']);
+      if (!isNaN(amt)) newSaleCashMTD += amt;
+    }
+  });
+  const daysRemaining = Math.max(0, daysInMonth - daysSoFar);
+  const projectedNewSaleCash = daysSoFar > 0 ? (newSaleCashMTD / daysSoFar) * daysRemaining : 0;
   const linearPaceRev = totalRev * paceMultiplier;
-  const monthlyPaceRev = expectedPaymentsThisMonth > 0
-    ? totalRev + expectedPaymentsThisMonth  // collected + known upcoming
-    : linearPaceRev;                         // fallback to linear if no expected payments data
+  const monthlyPaceRev = (expectedPaymentsThisMonth > 0 || pastDueExpectedThisMonth > 0)
+    ? totalRev + expectedPaymentsThisMonth + projectedNewSaleCash  // collected + live upcoming + new-sale pace
+    : linearPaceRev;                                               // fallback to linear if no expected payments data
 
   console.log(`[compute] Metrics: apps=${uniqueAppCount}, triage=${allTriageCalls.length}, sales=${allSalesCalls.length}, rev=$${totalRev}, triageShow=${triageShowRate.toFixed(1)}%, salesShow=${salesShowRate.toFixed(1)}%`);
 
@@ -3479,8 +3526,12 @@ function computeAndRender() {
   document.getElementById('monthlyPaceRev').textContent = '$' + monthlyPaceRev.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   // Show breakdown if expected payments exist
   const monthlyPaceChange = document.getElementById('monthlyPaceRevChange');
-  if (monthlyPaceChange && expectedPaymentsThisMonth > 0) {
-    monthlyPaceChange.textContent = `$${totalRev.toLocaleString(undefined,{maximumFractionDigits:0})} collected + $${expectedPaymentsThisMonth.toLocaleString(undefined,{maximumFractionDigits:0})} expected`;
+  if (monthlyPaceChange && (expectedPaymentsThisMonth > 0 || pastDueExpectedThisMonth > 0)) {
+    let breakdown = `$${totalRev.toLocaleString(undefined,{maximumFractionDigits:0})} collected + $${expectedPaymentsThisMonth.toLocaleString(undefined,{maximumFractionDigits:0})} scheduled + $${projectedNewSaleCash.toLocaleString(undefined,{maximumFractionDigits:0})} new-sale pace`;
+    if (pastDueExpectedThisMonth > 0) {
+      breakdown += ` (excl. $${pastDueExpectedThisMonth.toLocaleString(undefined,{maximumFractionDigits:0})} past-due)`;
+    }
+    monthlyPaceChange.textContent = breakdown;
     monthlyPaceChange.className = 'scorecard-change neutral';
   }
 
@@ -3606,7 +3657,8 @@ function computeAndRender() {
     unitsSold, totalRev, nonLtoRev, ltoRev, htdsRev, htdsUnits,
     triageShowed: triageShowed.length, salesShowed: salesShowed.length, salesClosed: salesClosed.length,
     hqLeads, lqLeads, daysInMonth, daysSoFar, paceMultiplier, monthlyPaceRev,
-    estPipelineRev, expectedPaymentsThisMonth
+    estPipelineRev, expectedPaymentsThisMonth, pastDueExpectedThisMonth,
+    newSaleCashMTD, projectedNewSaleCash
   };
   window._currentMonthlyRev = totalRev;
   window._currentWeeklyRev = totalRev / Math.max(1, Math.ceil(daysSoFar / 7));
