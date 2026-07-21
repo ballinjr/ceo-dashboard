@@ -2822,6 +2822,42 @@ function didShow(status) {
   return s.startsWith('showed') || s === 'cancelled dq' || s === 'follow up';
 }
 
+// Junk call statuses — rows that are NOT a real kept/missed appointment:
+// Rescheduled spawns a new row for the same person (counting it double-counts),
+// Duplicate / Invalid / Double Booking are data noise. These are excluded from
+// show-rate denominators and booked counts.
+const junkCallStatuses = ['rescheduled', 'duplicate', 'invalid', 'double booking'];
+function isJunkStatus(status) {
+  return junkCallStatuses.includes((status || '').toString().toLowerCase());
+}
+
+// Real sale row = has a client email. Excludes "Day Counter" placeholder rows
+// (blank amount/email) that exist in Sales_Log to mark calendar days.
+function isRealSaleRow(row) {
+  return ((row['Email'] || '').toString().includes('@'));
+}
+
+// Money-out transaction rows: refunds, disputes, chargebacks
+function isNegativeTxn(row) {
+  const tt = (row['Transaction Type'] || '').toString().toLowerCase();
+  return tt.includes('refund') || tt.includes('dispute') || tt.includes('chargeback');
+}
+
+// First-ever Coaching purchase date per client email (used for "new client" units)
+function getFirstCoachingByEmail() {
+  const map = new Map();
+  (salesData || []).forEach(row => {
+    if (!isRealSaleRow(row) || isNegativeTxn(row)) return;
+    if (!((row['Product Sold'] || '').toString().toLowerCase().includes('coaching'))) return;
+    const email = row['Email'].toString().trim().toLowerCase();
+    const d = getDateField(row, ['Date']);
+    if (!d) return;
+    const prev = map.get(email);
+    if (!prev || d < prev) map.set(email, d);
+  });
+  return map;
+}
+
 // Global DQ helpers (used across multiple render functions)
 const globalDqStatuses = ['dq', 'rescheduled', 'duplicate', 'showed dq', 'invalid', 'cancelled dq'];
 function isDqCall(row) {
@@ -2864,15 +2900,15 @@ function computeSourceShowRates(salesCallList) {
   const inbound = salesCallList.filter(r => !isOutbound(r));
   const all = salesCallList;
 
-  const outboundWithStatus = outbound.filter(r => r['Sales Call Status']);
+  const outboundWithStatus = outbound.filter(r => r['Sales Call Status'] && !isJunkStatus(r['Sales Call Status']));
   const outboundShowed = outboundWithStatus.filter(r => didShow(r['Sales Call Status']));
   const outboundShowRate = outboundWithStatus.length > 0 ? (outboundShowed.length / outboundWithStatus.length * 100) : 0;
 
-  const inboundWithStatus = inbound.filter(r => r['Sales Call Status']);
+  const inboundWithStatus = inbound.filter(r => r['Sales Call Status'] && !isJunkStatus(r['Sales Call Status']));
   const inboundShowed = inboundWithStatus.filter(r => didShow(r['Sales Call Status']));
   const inboundShowRate = inboundWithStatus.length > 0 ? (inboundShowed.length / inboundWithStatus.length * 100) : 0;
 
-  const allWithStatus = all.filter(r => r['Sales Call Status']);
+  const allWithStatus = all.filter(r => r['Sales Call Status'] && !isJunkStatus(r['Sales Call Status']));
   const allShowed = allWithStatus.filter(r => didShow(r['Sales Call Status']));
   const blendedShowRate = allWithStatus.length > 0 ? (allShowed.length / allWithStatus.length * 100) : 0;
 
@@ -2956,10 +2992,10 @@ function exportMTDOverview() {
     ['Est Pipeline Revenue', m.estPipelineRev.toFixed(2)],
     ['Expected Payments This Month', m.expectedPaymentsThisMonth.toFixed(2)],
     ['MTD Paced Revenue', m.monthlyPaceRev.toFixed(2)],
-    ['App Pace (projected)', Math.round(m.uniqueApps * m.paceMultiplier)],
-    ['Triage Pace (projected)', Math.round(m.bookedTriage * m.paceMultiplier)],
-    ['Sales Call Pace (projected)', Math.round(m.bookedSales * m.paceMultiplier)],
-    ['Units Sold Pace (projected)', Math.round(m.unitsSold * m.paceMultiplier)],
+    ['App Pace (projected)', m.appPace],
+    ['Triage Pace (projected)', m.triagePace],
+    ['Sales Call Pace (projected)', m.salesCallPace],
+    ['Units Sold Pace (projected)', m.unitsSoldPace],
   ];
   downloadCSV('MTD_Company_Overview_' + getDateRangeLabel() + '.csv', buildCSV(headers, rows));
 }
@@ -3010,11 +3046,18 @@ function exportMarketingOverview() {
 
   const showed = nonDqSales.filter(r => didShow(r['Sales Call Status']||''));
   const closed = showed.filter(r => (r['Sales Call Status']||'').toLowerCase() === 'showed c');
-  const htdsSales = sales.filter(r => { const ps = (r['Product Sold']||'').toLowerCase(); return ps.includes('coaching') || ps.includes('downsell'); });
-  const newHtds = htdsSales.filter(r => { const tt = (r['Transaction Type']||'').toLowerCase(); return !tt.includes('refund'); });
+  const newHtds = sales.filter(r => {
+    if (!isRealSaleRow(r) || isNegativeTxn(r)) return false;
+    const ps = (r['Product Sold']||'').toLowerCase();
+    return ps.includes('coaching') || ps.includes('downsell');
+  });
   const newRev = newHtds.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
-  const units = newHtds.length;
-  const aov = units > 0 ? newRev / units : 0;
+  // Units = new Coaching clients in range; AOV = HT+DS cash per unique client
+  const fcMap = getFirstCoachingByEmail();
+  let units = 0;
+  fcMap.forEach(d => { if (d >= startDate && d <= endDate) units++; });
+  const htdsClientCount = new Set(newHtds.map(r => r['Email'].toString().trim().toLowerCase())).size;
+  const aov = htdsClientCount > 0 ? newRev / htdsClientCount : 0;
 
   const headers = ['Metric','Value'];
   const rows = [
@@ -3354,7 +3397,8 @@ function computeAndRender() {
       const status = row[statusField];
       if (status) {
         const sl = status.toLowerCase();
-        if (sl === 'rescheduled' || sl === 'cancelled dq') return; // skip reschedules & cancelled DQs
+        // skip reschedules, cancelled DQs, and junk rows (duplicate/invalid/double booking)
+        if (sl === 'cancelled dq' || isJunkStatus(sl)) return;
       }
       const email = row['Email'];
       if (!email) return;
@@ -3392,19 +3436,26 @@ function computeAndRender() {
     const amt = parseFloat(row['Amount']);
     return sum + (isNaN(amt) ? 0 : amt);
   }, 0);
-  const unitsSold = sales.length;
+  // Units Sold = NEW high-ticket (Coaching) clients closed in range.
+  // A client counts once, in the period of their first-ever Coaching purchase.
+  // Excludes LTOs, downsells, later installments, refunds, and placeholder rows.
+  const firstCoachingByEmail = getFirstCoachingByEmail();
+  let unitsSold = 0;
+  firstCoachingByEmail.forEach(d => { if (d >= startDate && d <= endDate) unitsSold++; });
 
-  // HT+DS AOV = (Coaching + Downsell revenue) / (Coaching + Downsell units)
-  // Exclude LTOs AND Refunds from AOV calculation
-  const htdsSales = nonLtoSales.filter(row => {
-    const tt = row['Transaction Type'];
-    return !tt || !tt.toLowerCase().includes('refund');
+  // HT+DS AOV = cash collected per unique Coaching/Downsell client in range.
+  // Excludes LTOs, refunds/disputes/chargebacks, and placeholder rows.
+  const htdsSales = sales.filter(row => {
+    if (!isRealSaleRow(row) || isNegativeTxn(row)) return false;
+    const ps = (row['Product Sold'] || '').toString().toLowerCase();
+    return ps.includes('coaching') || ps.includes('downsell');
   });
-  const htdsUnits = htdsSales.length;
   const htdsRev = htdsSales.reduce((sum, row) => {
     const amt = parseFloat(row['Amount']);
     return sum + (isNaN(amt) ? 0 : amt);
   }, 0);
+  const htdsClients = new Set(htdsSales.map(r => r['Email'].toString().trim().toLowerCase()));
+  const htdsUnits = htdsClients.size;
   const htdsAov = htdsUnits > 0 ? htdsRev / htdsUnits : 0;
 
   // Expected Payments — from "Expected Next Payment" and "Expected Next Payment Date" in Sales_Log
@@ -3447,12 +3498,14 @@ function computeAndRender() {
   const estPipelineRev = totalRev + expectedPaymentsThisMonth;
 
   // Triage Show Rate — uses pastTriageCalls (only calls already scheduled, not future)
-  const triageWithStatus = pastTriageCalls.filter(r => r['Triage Status']);
+  // Denominator excludes junk statuses (rescheduled/duplicate/invalid) — those aren't real appointments
+  const triageWithStatus = pastTriageCalls.filter(r => r['Triage Status'] && !isJunkStatus(r['Triage Status']));
   const triageShowed = triageWithStatus.filter(r => didShow(r['Triage Status']));
   const triageShowRate = triageWithStatus.length > 0 ? (triageShowed.length / triageWithStatus.length * 100) : 0;
 
   // Sales Show Rate — uses pastSalesCalls (only calls already scheduled, not future)
-  const salesWithStatus = pastSalesCalls.filter(r => r['Sales Call Status']);
+  // Denominator excludes junk statuses (rescheduled/duplicate/invalid) — those aren't real appointments
+  const salesWithStatus = pastSalesCalls.filter(r => r['Sales Call Status'] && !isJunkStatus(r['Sales Call Status']));
   const salesShowed = salesWithStatus.filter(r => didShow(r['Sales Call Status']));
   const salesShowRate = salesWithStatus.length > 0 ? (salesShowed.length / salesWithStatus.length * 100) : 0;
 
@@ -3474,12 +3527,38 @@ function computeAndRender() {
     return rt && rt.toUpperCase().includes('LQ');
   }).length;
 
-  // Pacing (project to end of month)
-  const paceMultiplier = daysInMonth / daysSoFar;
-  const appPace = Math.round(uniqueAppCount * paceMultiplier);
-  const triagePace = Math.round(bookedTriageCount * paceMultiplier);
-  const salesCallPace = Math.round(bookedSalesCount * paceMultiplier);
-  const unitsSoldPace = Math.round(unitsSold * paceMultiplier);
+  // Pacing (project to end of month) — TRAILING 90-DAY RUN RATE
+  // Pace = actual MTD + (trailing-90-day daily rate × days remaining).
+  // The rolling window is anchored at endDate and spans the month boundary, so the
+  // projection is stable at the start of a month (full 30 days of history) and doesn't
+  // whipsaw when sales arrive in bursts. MTD actuals are never diluted — only the
+  // forward projection uses the rolling rate.
+  const paceMultiplier = daysInMonth / daysSoFar; // kept for linear fallback / exports
+  const daysRemaining = Math.max(0, daysInMonth - daysSoFar);
+  // 90-day window = ~3 full monthly cycles, so one hot (or dead) month-end stretch
+  // can't dominate the projection the way it would with a 30-day window
+  const PACE_WINDOW_DAYS = 90;
+  const windowStart = new Date(endDate.getTime() - PACE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const inWindow30 = d => d && d >= windowStart && d <= endDate;
+
+  // Trailing-window counts (same dedup/filter rules as the MTD actuals)
+  const appEmails30 = new Set();
+  appData.forEach(r => {
+    const d = getDateField(r, ['Date Submitted']);
+    if (!inWindow30(d)) return;
+    const e = (r['Email'] || '').toString().toLowerCase();
+    if (e) appEmails30.add(e);
+  });
+  const calls30 = callData.filter(r => inWindow30(getDateField(r, ['Date Created'])));
+  const triage30 = countBookedUnique(calls30.filter(r => (r['Call Type'] || '').toLowerCase().includes('triage')), 'Triage Status');
+  const salesCalls30 = countBookedUnique(calls30.filter(r => { const ct = r['Call Type'] || ''; return ct.includes('1C Sales') || ct.includes('2C Sales'); }), 'Sales Call Status');
+  let units30 = 0;
+  firstCoachingByEmail.forEach(d => { if (inWindow30(d)) units30++; });
+
+  const appPace = Math.round(uniqueAppCount + (appEmails30.size / PACE_WINDOW_DAYS) * daysRemaining);
+  const triagePace = Math.round(bookedTriageCount + (triage30 / PACE_WINDOW_DAYS) * daysRemaining);
+  const salesCallPace = Math.round(bookedSalesCount + (salesCalls30 / PACE_WINDOW_DAYS) * daysRemaining);
+  const unitsSoldPace = Math.round(unitsSold + (units30 / PACE_WINDOW_DAYS) * daysRemaining);
   // Monthly Pace Rev = collected MTD
   //                  + live scheduled payments due in the rest of the month
   //                  + projected cash from NEW sales for the remaining days
@@ -3504,8 +3583,24 @@ function computeAndRender() {
       if (!isNaN(amt)) newSaleCashMTD += amt;
     }
   });
-  const daysRemaining = Math.max(0, daysInMonth - daysSoFar);
-  const projectedNewSaleCash = daysSoFar > 0 ? (newSaleCashMTD / daysSoFar) * daysRemaining : 0;
+  // New-sale cash over the trailing window = DAY-ONE cash from new clients only
+  // (the payment made on the date of their first-ever sale). Follow-up installments are
+  // excluded here because known clients' upcoming payments are already counted in
+  // expectedPaymentsThisMonth — a future unknown client only contributes day-one cash
+  // before month end.
+  let newSaleCash30 = 0;
+  salesData.forEach(row => {
+    if (!isRealSaleRow(row)) return;
+    const d = getDateField(row, ['Date']);
+    if (!inWindow30(d)) return;
+    const email = row['Email'].toString().trim().toLowerCase();
+    const first = firstSaleByEmail.get(email);
+    if (first && inWindow30(first) && d.getTime() === first.getTime()) {
+      const amt = parseFloat(row['Amount']);
+      if (!isNaN(amt)) newSaleCash30 += amt;
+    }
+  });
+  const projectedNewSaleCash = (newSaleCash30 / PACE_WINDOW_DAYS) * daysRemaining;
   const linearPaceRev = totalRev * paceMultiplier;
   const monthlyPaceRev = (expectedPaymentsThisMonth > 0 || pastDueExpectedThisMonth > 0)
     ? totalRev + expectedPaymentsThisMonth + projectedNewSaleCash  // collected + live upcoming + new-sale pace
@@ -3525,6 +3620,11 @@ function computeAndRender() {
   document.getElementById('triagePace').textContent = triagePace.toLocaleString();
   document.getElementById('salesCallPace').textContent = salesCallPace.toLocaleString();
   document.getElementById('unitsSoldPace').textContent = unitsSoldPace.toLocaleString();
+  const unitsPaceChange = document.getElementById('unitsSoldPaceChange');
+  if (unitsPaceChange) {
+    unitsPaceChange.textContent = `${unitsSold} MTD · ${units30} last 90d`;
+    unitsPaceChange.className = 'scorecard-change neutral';
+  }
   document.getElementById('monthlyPaceRev').textContent = '$' + monthlyPaceRev.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   // Show breakdown if expected payments exist
   const monthlyPaceChange = document.getElementById('monthlyPaceRevChange');
@@ -3560,7 +3660,9 @@ function computeAndRender() {
   });
 
   // Qualified SALES calls only: email maps to LQ or HQ app, call type is sales
+  // Excludes junk-status rows (rescheduled/duplicate/invalid) so rates aren't diluted
   const qualifiedSalesCalls = pastSalesCalls.filter(row => {
+    if (isJunkStatus(row['Sales Call Status'])) return false;
     const em = (row['Email'] || '').toString().toLowerCase();
     const rt = appResultMap[em] || '';
     return rt.includes('LQ') || rt.includes('HQ');
@@ -3644,7 +3746,9 @@ function computeAndRender() {
   renderPitchWeeklyChart(pitchedList);
 
   // === DAILY CALLS BOOKED ===
-  const avgCallsPerDay = daysSoFar > 0 ? calls.length / daysSoFar : 0;
+  // Exclude placeholder rows (no Call Type / no Email) from the daily call average
+  const realCallRows = calls.filter(r => r['Call Type'] && r['Email']);
+  const avgCallsPerDay = daysSoFar > 0 ? realCallRows.length / daysSoFar : 0;
   document.getElementById('avgCallsPerDay').textContent = avgCallsPerDay.toFixed(1);
 
   renderDailyCallsChart(calls);
@@ -3657,7 +3761,8 @@ function computeAndRender() {
     triageShowed: triageShowed.length, salesShowed: salesShowed.length, salesClosed: salesClosed.length,
     hqLeads, lqLeads, daysInMonth, daysSoFar, paceMultiplier, monthlyPaceRev,
     estPipelineRev, expectedPaymentsThisMonth, pastDueExpectedThisMonth,
-    newSaleCashMTD, projectedNewSaleCash
+    newSaleCashMTD, newSaleCash30, projectedNewSaleCash,
+    appPace, triagePace, salesCallPace, unitsSoldPace, units30
   };
   window._currentMonthlyRev = totalRev;
   window._currentWeeklyRev = totalRev / Math.max(1, Math.ceil(daysSoFar / 7));
@@ -3685,17 +3790,20 @@ function computeAndRender() {
 
     const cPastTriage = cPastCalls.filter(r => (r['Call Type']||'').toLowerCase().includes('triage'));
     const cPastSales = cPastCalls.filter(r => { const ct = r['Call Type']||''; return ct.includes('1C Sales')||ct.includes('2C Sales'); });
-    const cTriageWithSt = cPastTriage.filter(r => r['Triage Status']);
+    const cTriageWithSt = cPastTriage.filter(r => r['Triage Status'] && !isJunkStatus(r['Triage Status']));
     const cTriageShowed = cTriageWithSt.filter(r => didShow(r['Triage Status']));
     const cTriageShowRate = cTriageWithSt.length > 0 ? cTriageShowed.length/cTriageWithSt.length*100 : 0;
-    const cSalesWithSt = cPastSales.filter(r => r['Sales Call Status']);
+    const cSalesWithSt = cPastSales.filter(r => r['Sales Call Status'] && !isJunkStatus(r['Sales Call Status']));
     const cSalesShowed = cSalesWithSt.filter(r => didShow(r['Sales Call Status']));
     const cSalesShowRate = cSalesWithSt.length > 0 ? cSalesShowed.length/cSalesWithSt.length*100 : 0;
     const cClosed = cSalesShowed.filter(r => (r['Sales Call Status']||'').toLowerCase() === 'showed c');
     const cCloseRate = cSalesShowed.length > 0 ? cClosed.length/cSalesShowed.length*100 : 0;
 
-    const cHtds = cSales.filter(r => { const ps = (r['Product Sold']||'').toLowerCase(); return !ps.includes('lto'); }).filter(r => { const tt = (r['Transaction Type']||'').toLowerCase(); return !tt.includes('refund'); });
-    const cHtdsAov = cHtds.length > 0 ? cHtds.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0) / cHtds.length : 0;
+    // Mirror main AOV definition: cash per unique Coaching/Downsell client, excl. refunds/disputes/placeholders
+    const cHtds = cSales.filter(r => isRealSaleRow(r) && !isNegativeTxn(r))
+      .filter(r => { const ps = (r['Product Sold']||'').toLowerCase(); return ps.includes('coaching') || ps.includes('downsell'); });
+    const cHtdsClients = new Set(cHtds.map(r => r['Email'].toString().trim().toLowerCase()));
+    const cHtdsAov = cHtdsClients.size > 0 ? cHtds.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0) / cHtdsClients.size : 0;
 
     showDelta('uniqueApps', uniqueAppCount, cUniqueEmails.size);
     showDelta('bookedTriage', bookedTriageCount, cBookedTriage);
@@ -3710,6 +3818,7 @@ function computeAndRender() {
 
     // Call Quality Breakdown comparison — use appResultMap (already built from all appData)
     const cQualifiedSales = cPastSales.filter(row => {
+      if (isJunkStatus(row['Sales Call Status'])) return false;
       const em = (row['Email'] || '').toString().toLowerCase();
       const rt = appResultMap[em] || '';
       return rt.includes('LQ') || rt.includes('HQ');
@@ -3765,9 +3874,12 @@ function computeAndRender() {
     showDelta('pitchedOrganic', pitchedOrganicCount, cPitchedOrganic);
     showDelta('pitchedAds', pitchedAdsCount, cPitchedAds);
 
-    // Daily Calls comparison
-    const cDaysSoFar = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
-    const cAvgCallsPerDay = cDaysSoFar > 0 ? cCalls.length / cDaysSoFar : 0;
+    // Daily Calls comparison — use the COMPARE period's own day count (was using the current period's)
+    const cDaysSoFar = (compareStartDate && compareEndDate)
+      ? Math.max(1, Math.floor((compareEndDate - compareStartDate) / (1000 * 60 * 60 * 24)) + 1)
+      : daysSoFar;
+    const cRealCallRows = cCalls.filter(r => r['Call Type'] && r['Email']);
+    const cAvgCallsPerDay = cDaysSoFar > 0 ? cRealCallRows.length / cDaysSoFar : 0;
     showDelta('avgCallsPerDay', avgCallsPerDay, cAvgCallsPerDay);
   }
 
@@ -4044,7 +4156,7 @@ function renderLeaderboard(calls, sales) {
     if (!email) return;
     const booker = row['Booked With'] || 'Unknown';
     if (!bookerMap[booker]) bookerMap[booker] = { salesCalls: 0, scheduled: 0, showed: 0, closed: 0, collected: 0, contracted: 0, unitsSold: 0, setters: {} };
-    if (statusLower === 'rescheduled' || statusLower === 'cancelled dq') return;
+    if (statusLower === 'cancelled dq' || isJunkStatus(statusLower)) return;
     if (!seenBooked[booker]) seenBooked[booker] = new Set();
     if (!seenBooked[booker].has(email)) {
       seenBooked[booker].add(email);
@@ -4065,7 +4177,7 @@ function renderLeaderboard(calls, sales) {
     if (!email) return;
     const booker = row['Booked With'] || 'Unknown';
     if (!bookerMap[booker]) bookerMap[booker] = { salesCalls: 0, scheduled: 0, showed: 0, closed: 0, collected: 0, contracted: 0, unitsSold: 0, setters: {} };
-    if (statusLower === 'rescheduled') return;
+    if (isJunkStatus(statusLower)) return;
 
     // Scheduled (show rate denominator): unique emails from past calls
     if (!seenScheduled[booker]) seenScheduled[booker] = new Set();
@@ -4095,7 +4207,10 @@ function renderLeaderboard(calls, sales) {
   // Add revenue from Sales_Log by Closer — EXCLUDE LTOs from leaderboard
   // Also track Setter for each closer's sales
   const filteredSales = filterByDate(salesData, ['Date']);
+  const firstCoachingMap = getFirstCoachingByEmail();
+  const unitCountedByCloser = {};
   filteredSales.forEach(row => {
+    if (!isRealSaleRow(row)) return; // skip Day Counter placeholder rows
     const ps = row['Product Sold'];
     if (ps && ps.toLowerCase().includes('lto')) return; // Skip LTOs
     const closer = row['Closer'] || 'Unknown';
@@ -4104,7 +4219,18 @@ function renderLeaderboard(calls, sales) {
     const contracted = parseFloat(row['Amount Contracted']);
     bookerMap[closer].collected += isNaN(amt) ? 0 : amt;
     bookerMap[closer].contracted += isNaN(contracted) ? 0 : contracted;
-    bookerMap[closer].unitsSold++;
+    // Units = NEW coaching clients closed in range (client counts once, not per installment)
+    const email = row['Email'].toString().trim().toLowerCase();
+    if ((ps || '').toLowerCase().includes('coaching')) {
+      const firstD = firstCoachingMap.get(email);
+      if (firstD && firstD >= startDate && firstD <= endDate) {
+        if (!unitCountedByCloser[closer]) unitCountedByCloser[closer] = new Set();
+        if (!unitCountedByCloser[closer].has(email)) {
+          unitCountedByCloser[closer].add(email);
+          bookerMap[closer].unitsSold++;
+        }
+      }
+    }
     // Track setter attribution
     const setter = row['Setter'];
     if (setter) {
@@ -9091,19 +9217,23 @@ function renderYtdTriageTrends() {
     // Current year
     const mStartCur = new Date(currentYear, m, 1);
     const mEndCur = new Date(currentYear, m + 1, 0, 23, 59, 59);
+    // Exclude junk-status rows (rescheduled/duplicate/invalid) from all counts
     const triageCallsCur = filteredCallData.filter(r => {
       const d = getDateField(r, ['Date Created']);
       const ct = r['Call Type']||'';
-      return d && d >= mStartCur && d <= mEndCur && ct.toLowerCase().includes('triage');
+      return d && d >= mStartCur && d <= mEndCur && ct.toLowerCase().includes('triage') && !isJunkStatus(r['Triage Status']);
     });
 
-    // Previous year
+    // Previous year — for the CURRENT (partial) month, clip to the same day-of-month
+    // so the YoY volume comparison is apples-to-apples
     const mStartPrev = new Date(currentYear - 1, m, 1);
-    const mEndPrev = new Date(currentYear - 1, m + 1, 0, 23, 59, 59);
+    const mEndPrev = (m === currentMonth)
+      ? new Date(currentYear - 1, m, now.getDate(), 23, 59, 59)
+      : new Date(currentYear - 1, m + 1, 0, 23, 59, 59);
     const triageCallsPrev = filteredCallData.filter(r => {
       const d = getDateField(r, ['Date Created']);
       const ct = r['Call Type']||'';
-      return d && d >= mStartPrev && d <= mEndPrev && ct.toLowerCase().includes('triage');
+      return d && d >= mStartPrev && d <= mEndPrev && ct.toLowerCase().includes('triage') && !isJunkStatus(r['Triage Status']);
     });
 
     // 1. Volume
@@ -9111,16 +9241,20 @@ function renderYtdTriageTrends() {
     volumeDataPrev.push(triageCallsPrev.length);
 
     // 2. Pass Through % - count triages whose email appears in a non-triage sales call
+    // Pass-through: of triages that SHOWED, how many got a 1C/2C sales call booked that month.
+    // (Numerator gated on showed so it's a true subset of the denominator; matches only real
+    //  sales call types, not Follow Up / blank rows.)
     let ptCountCur = 0, showedCur = 0;
     triageCallsCur.forEach(t => {
       const em = (t['Email']||'').toLowerCase();
-      if (em) {
+      if (em && didShow(t['Triage Status']||'')) {
+        showedCur++;
         const inSales = filteredCallData.some(s => {
           const d = getDateField(s, ['Date Created']);
-          return d && d >= mStartCur && d <= mEndCur && !(s['Call Type']||'').toLowerCase().includes('triage') && (s['Email']||'').toLowerCase() === em;
+          const sct = s['Call Type']||'';
+          return d && d >= mStartCur && d <= mEndCur && (sct.includes('1C Sales') || sct.includes('2C Sales')) && (s['Email']||'').toLowerCase() === em;
         });
         if (inSales) ptCountCur++;
-        if (didShow(t['Triage Status']||'')) showedCur++;
       }
     });
     const ptPctCur = showedCur > 0 ? (ptCountCur / showedCur * 100) : 0;
@@ -9129,13 +9263,14 @@ function renderYtdTriageTrends() {
     let ptCountPrev = 0, showedPrev = 0;
     triageCallsPrev.forEach(t => {
       const em = (t['Email']||'').toLowerCase();
-      if (em) {
+      if (em && didShow(t['Triage Status']||'')) {
+        showedPrev++;
         const inSales = filteredCallData.some(s => {
           const d = getDateField(s, ['Date Created']);
-          return d && d >= mStartPrev && d <= mEndPrev && !(s['Call Type']||'').toLowerCase().includes('triage') && (s['Email']||'').toLowerCase() === em;
+          const sct = s['Call Type']||'';
+          return d && d >= mStartPrev && d <= mEndPrev && (sct.includes('1C Sales') || sct.includes('2C Sales')) && (s['Email']||'').toLowerCase() === em;
         });
         if (inSales) ptCountPrev++;
-        if (didShow(t['Triage Status']||'')) showedPrev++;
       }
     });
     const ptPctPrev = showedPrev > 0 ? (ptCountPrev / showedPrev * 100) : 0;
@@ -9191,18 +9326,17 @@ function renderYtdTriageTrends() {
     const closeRatePrev = showPrev > 0 ? (closedPrev / showPrev * 100) : 0;
     closeRateDataPrev.push(closeRatePrev);
 
-    // 6. DQ %
+    // 6. DQ % — true disqualifications only (DQ / Showed DQ / Cancelled DQ).
+    // (isDqCall also matches Rescheduled/Duplicate/Invalid, which are scheduling noise, not DQs —
+    //  and those rows are already excluded from triageCallsCur/Prev above.)
+    const isTrueDq = t => { const s = (t['Triage Status']||'').toLowerCase(); return s === 'dq' || s === 'showed dq' || s === 'cancelled dq'; };
     let dqCur = 0;
-    triageCallsCur.forEach(t => {
-      if (isDqCall(t)) dqCur++;
-    });
+    triageCallsCur.forEach(t => { if (isTrueDq(t)) dqCur++; });
     const dqPctCur = triageCallsCur.length > 0 ? (dqCur / triageCallsCur.length * 100) : 0;
     dqDataCur.push(dqPctCur);
 
     let dqPrev = 0;
-    triageCallsPrev.forEach(t => {
-      if (isDqCall(t)) dqPrev++;
-    });
+    triageCallsPrev.forEach(t => { if (isTrueDq(t)) dqPrev++; });
     const dqPctPrev = triageCallsPrev.length > 0 ? (dqPrev / triageCallsPrev.length * 100) : 0;
     dqDataPrev.push(dqPctPrev);
   }
@@ -9284,22 +9418,27 @@ function renderYtdSalesTrends() {
     const salesCallsCur = filteredCallData.filter(r => {
       const d = getDateField(r, ['Date Created']);
       const ct = r['Call Type']||'';
-      return d && d >= mStartCur && d <= mEndCur && (ct.includes('1C Sales') || ct.includes('2C Sales'));
+      return d && d >= mStartCur && d <= mEndCur && (ct.includes('1C Sales') || ct.includes('2C Sales')) && !isJunkStatus(r['Sales Call Status']);
     });
+    // Real transactions only (exclude Day Counter placeholders)
     const salesTransCur = salesData.filter(r => {
+      if (!isRealSaleRow(r)) return false;
       const d = getDateField(r, ['Date']);
       return d && d >= mStartCur && d <= mEndCur;
     });
 
-    // Previous year
+    // Previous year — clip current (partial) month to same day-of-month for fair YoY
     const mStartPrev = new Date(currentYear - 1, m, 1);
-    const mEndPrev = new Date(currentYear - 1, m + 1, 0, 23, 59, 59);
+    const mEndPrev = (m === currentMonth)
+      ? new Date(currentYear - 1, m, now.getDate(), 23, 59, 59)
+      : new Date(currentYear - 1, m + 1, 0, 23, 59, 59);
     const salesCallsPrev = filteredCallData.filter(r => {
       const d = getDateField(r, ['Date Created']);
       const ct = r['Call Type']||'';
-      return d && d >= mStartPrev && d <= mEndPrev && (ct.includes('1C Sales') || ct.includes('2C Sales'));
+      return d && d >= mStartPrev && d <= mEndPrev && (ct.includes('1C Sales') || ct.includes('2C Sales')) && !isJunkStatus(r['Sales Call Status']);
     });
     const salesTransPrev = salesData.filter(r => {
+      if (!isRealSaleRow(r)) return false;
       const d = getDateField(r, ['Date']);
       return d && d >= mStartPrev && d <= mEndPrev;
     });
@@ -9308,13 +9447,21 @@ function renderYtdSalesTrends() {
     volumeDataCur.push(salesCallsCur.length);
     volumeDataPrev.push(salesCallsPrev.length);
 
-    // 2. AOV (average order value)
-    const revenueCur = salesTransCur.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
-    const aovCur = salesTransCur.length > 0 ? (revenueCur / salesTransCur.length) : 0;
+    // 2. AOV = HT+DS cash collected per unique Coaching/Downsell client that month
+    // (excludes LTOs, refunds/disputes, placeholders — matches the MTD scorecard definition)
+    const htdsFilter = r => {
+      if (isNegativeTxn(r)) return false;
+      const ps = (r['Product Sold']||'').toLowerCase();
+      return ps.includes('coaching') || ps.includes('downsell');
+    };
+    const htdsCur = salesTransCur.filter(htdsFilter);
+    const htdsCurClients = new Set(htdsCur.map(r => r['Email'].toString().trim().toLowerCase()));
+    const aovCur = htdsCurClients.size > 0 ? htdsCur.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0) / htdsCurClients.size : 0;
     aovDataCur.push(aovCur);
 
-    const revenuePrev = salesTransPrev.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
-    const aovPrev = salesTransPrev.length > 0 ? (revenuePrev / salesTransPrev.length) : 0;
+    const htdsPrev = salesTransPrev.filter(htdsFilter);
+    const htdsPrevClients = new Set(htdsPrev.map(r => r['Email'].toString().trim().toLowerCase()));
+    const aovPrev = htdsPrevClients.size > 0 ? htdsPrev.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0) / htdsPrevClients.size : 0;
     aovDataPrev.push(aovPrev);
 
     // 3. Show Rate %
@@ -9357,9 +9504,15 @@ function renderYtdSalesTrends() {
     const closeRatePrev = showPrev > 0 ? (closedPrev / showPrev * 100) : 0;
     closeRateDataPrev.push(closeRatePrev);
 
-    // 6. Units Sold (count of sales transactions)
-    unitsSoldDataCur.push(salesTransCur.length);
-    unitsSoldDataPrev.push(salesTransPrev.length);
+    // 6. Units Sold = NEW Coaching clients that month (first-ever coaching purchase)
+    const ytdFirstCoaching = getFirstCoachingByEmail();
+    let unitsCur = 0, unitsPrev = 0;
+    ytdFirstCoaching.forEach(d => {
+      if (d >= mStartCur && d <= mEndCur) unitsCur++;
+      else if (d >= mStartPrev && d <= mEndPrev) unitsPrev++;
+    });
+    unitsSoldDataCur.push(unitsCur);
+    unitsSoldDataPrev.push(unitsPrev);
   }
 
   const labels = months.slice(0, currentMonth + 1);
@@ -9432,49 +9585,73 @@ function renderYtd1Cx2CTrends() {
   const units1CDataCur = [], units1CDataPrev = [];
   const units2CDataCur = [], units2CDataPrev = [];
 
+  // Sales_Log has no "Account Type" column (the old filter matched nothing, so AOV/Units
+  // charts on this page were always zero). Attribute each sale to 1C or 2C via the
+  // client's most recent sales call type in Call_Log.
+  const callTypeByEmail = new Map();
+  callData.forEach(r => {
+    const ct = r['Call Type'] || '';
+    if (!ct.includes('1C Sales') && !ct.includes('2C Sales')) return;
+    const em = (r['Email'] || '').toString().toLowerCase();
+    if (!em) return;
+    const d = getDateField(r, ['Date Created']);
+    const prev = callTypeByEmail.get(em);
+    if (!prev || !prev.d || (d && d >= prev.d)) {
+      callTypeByEmail.set(em, { d, type: ct.includes('1C') ? '1C' : '2C' });
+    }
+  });
+  const saleAccountType = r => {
+    const em = (r['Email'] || '').toString().toLowerCase();
+    const entry = callTypeByEmail.get(em);
+    return entry ? entry.type : '';
+  };
+  const firstCoachingMap1c2c = getFirstCoachingByEmail();
+
   for (let m = 0; m <= currentMonth; m++) {
     // Current year
     const mStartCur = new Date(currentYear, m, 1);
     const mEndCur = new Date(currentYear, m + 1, 0, 23, 59, 59);
     const calls1CCur = filteredCallData.filter(r => {
       const d = getDateField(r, ['Date Created']);
-      return d && d >= mStartCur && d <= mEndCur && (r['Call Type']||'').includes('1C Sales');
+      return d && d >= mStartCur && d <= mEndCur && (r['Call Type']||'').includes('1C Sales') && !isJunkStatus(r['Sales Call Status']);
     });
     const calls2CCur = filteredCallData.filter(r => {
       const d = getDateField(r, ['Date Created']);
-      return d && d >= mStartCur && d <= mEndCur && (r['Call Type']||'').includes('2C Sales');
+      return d && d >= mStartCur && d <= mEndCur && (r['Call Type']||'').includes('2C Sales') && !isJunkStatus(r['Sales Call Status']);
     });
     const sales1CCur = salesData.filter(r => {
+      if (!isRealSaleRow(r)) return false;
       const d = getDateField(r, ['Date']);
-      const accType = r['Account Type']||'';
-      return d && d >= mStartCur && d <= mEndCur && accType.includes('1C');
+      return d && d >= mStartCur && d <= mEndCur && saleAccountType(r) === '1C';
     });
     const sales2CCur = salesData.filter(r => {
+      if (!isRealSaleRow(r)) return false;
       const d = getDateField(r, ['Date']);
-      const accType = r['Account Type']||'';
-      return d && d >= mStartCur && d <= mEndCur && accType.includes('2C');
+      return d && d >= mStartCur && d <= mEndCur && saleAccountType(r) === '2C';
     });
 
-    // Previous year
+    // Previous year — clip current (partial) month to same day-of-month for fair YoY
     const mStartPrev = new Date(currentYear - 1, m, 1);
-    const mEndPrev = new Date(currentYear - 1, m + 1, 0, 23, 59, 59);
+    const mEndPrev = (m === currentMonth)
+      ? new Date(currentYear - 1, m, now.getDate(), 23, 59, 59)
+      : new Date(currentYear - 1, m + 1, 0, 23, 59, 59);
     const calls1CPrev = filteredCallData.filter(r => {
       const d = getDateField(r, ['Date Created']);
-      return d && d >= mStartPrev && d <= mEndPrev && (r['Call Type']||'').includes('1C Sales');
+      return d && d >= mStartPrev && d <= mEndPrev && (r['Call Type']||'').includes('1C Sales') && !isJunkStatus(r['Sales Call Status']);
     });
     const calls2CPrev = filteredCallData.filter(r => {
       const d = getDateField(r, ['Date Created']);
-      return d && d >= mStartPrev && d <= mEndPrev && (r['Call Type']||'').includes('2C Sales');
+      return d && d >= mStartPrev && d <= mEndPrev && (r['Call Type']||'').includes('2C Sales') && !isJunkStatus(r['Sales Call Status']);
     });
     const sales1CPrev = salesData.filter(r => {
+      if (!isRealSaleRow(r)) return false;
       const d = getDateField(r, ['Date']);
-      const accType = r['Account Type']||'';
-      return d && d >= mStartPrev && d <= mEndPrev && accType.includes('1C');
+      return d && d >= mStartPrev && d <= mEndPrev && saleAccountType(r) === '1C';
     });
     const sales2CPrev = salesData.filter(r => {
+      if (!isRealSaleRow(r)) return false;
       const d = getDateField(r, ['Date']);
-      const accType = r['Account Type']||'';
-      return d && d >= mStartPrev && d <= mEndPrev && accType.includes('2C');
+      return d && d >= mStartPrev && d <= mEndPrev && saleAccountType(r) === '2C';
     });
 
     // 1. Volume (bar - grouped)
@@ -9483,20 +9660,21 @@ function renderYtd1Cx2CTrends() {
     volume1CDataPrev.push(calls1CPrev.length);
     volume2CDataPrev.push(calls2CPrev.length);
 
-    // 2. AOV (line - two lines)
-    const rev1CCur = sales1CCur.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
-    const aov1CCur = sales1CCur.length > 0 ? (rev1CCur / sales1CCur.length) : 0;
-    aov1CDataCur.push(aov1CCur);
-    const rev2CCur = sales2CCur.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
-    const aov2CCur = sales2CCur.length > 0 ? (rev2CCur / sales2CCur.length) : 0;
-    aov2CDataCur.push(aov2CCur);
-
-    const rev1CPrev = sales1CPrev.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
-    const aov1CPrev = sales1CPrev.length > 0 ? (rev1CPrev / sales1CPrev.length) : 0;
-    aov1CDataPrev.push(aov1CPrev);
-    const rev2CPrev = sales2CPrev.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0);
-    const aov2CPrev = sales2CPrev.length > 0 ? (rev2CPrev / sales2CPrev.length) : 0;
-    aov2CDataPrev.push(aov2CPrev);
+    // 2. AOV = HT+DS cash per unique client (excl. LTOs, refunds/disputes) — matches MTD definition
+    const htds1c2cFilter = r => {
+      if (isNegativeTxn(r)) return false;
+      const ps = (r['Product Sold']||'').toLowerCase();
+      return ps.includes('coaching') || ps.includes('downsell');
+    };
+    const perClientAov = list => {
+      const h = list.filter(htds1c2cFilter);
+      const clients = new Set(h.map(r => r['Email'].toString().trim().toLowerCase()));
+      return clients.size > 0 ? h.reduce((s,r) => s + (parseFloat(r['Amount'])||0), 0) / clients.size : 0;
+    };
+    aov1CDataCur.push(perClientAov(sales1CCur));
+    aov2CDataCur.push(perClientAov(sales2CCur));
+    aov1CDataPrev.push(perClientAov(sales1CPrev));
+    aov2CDataPrev.push(perClientAov(sales2CPrev));
 
     // 3. Show Rate % (line - two lines)
     let show1CCur = 0;
@@ -9566,11 +9744,18 @@ function renderYtd1Cx2CTrends() {
     const closeRate2CPrev = show2CPrev > 0 ? (close2CPrev / show2CPrev * 100) : 0;
     close2CDataPrev.push(closeRate2CPrev);
 
-    // 6. Units Sold (bar - grouped)
-    units1CDataCur.push(sales1CCur.length);
-    units2CDataCur.push(sales2CCur.length);
-    units1CDataPrev.push(sales1CPrev.length);
-    units2CDataPrev.push(sales2CPrev.length);
+    // 6. Units Sold = NEW Coaching clients that month, split by 1C/2C attribution
+    const countNewUnits = (mStart, mEnd, type) => {
+      let n = 0;
+      firstCoachingMap1c2c.forEach((d, em) => {
+        if (d >= mStart && d <= mEnd && (callTypeByEmail.get(em) || {}).type === type) n++;
+      });
+      return n;
+    };
+    units1CDataCur.push(countNewUnits(mStartCur, mEndCur, '1C'));
+    units2CDataCur.push(countNewUnits(mStartCur, mEndCur, '2C'));
+    units1CDataPrev.push(countNewUnits(mStartPrev, mEndPrev, '1C'));
+    units2CDataPrev.push(countNewUnits(mStartPrev, mEndPrev, '2C'));
   }
 
   const labels = months.slice(0, currentMonth + 1);
