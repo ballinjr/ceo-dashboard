@@ -3303,7 +3303,9 @@ function computeAndRender() {
   // Calculate days in period and month
   const now = new Date();
   const daysInMonth = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
-  const daysSoFar = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
+  // floor + 1 = calendar days elapsed inclusive (Jul 1 → Jul 21 = 21 days).
+  // ceil + 1 was over-counting by one day, deflating every pace projection.
+  const daysSoFar = Math.max(1, Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
 
   // Unique applications (unique emails)
   const uniqueEmails = new Set();
@@ -3527,11 +3529,8 @@ function computeAndRender() {
   // Show breakdown if expected payments exist
   const monthlyPaceChange = document.getElementById('monthlyPaceRevChange');
   if (monthlyPaceChange && (expectedPaymentsThisMonth > 0 || pastDueExpectedThisMonth > 0)) {
-    let breakdown = `$${totalRev.toLocaleString(undefined,{maximumFractionDigits:0})} collected + $${expectedPaymentsThisMonth.toLocaleString(undefined,{maximumFractionDigits:0})} scheduled + $${projectedNewSaleCash.toLocaleString(undefined,{maximumFractionDigits:0})} new-sale pace`;
-    if (pastDueExpectedThisMonth > 0) {
-      breakdown += ` (excl. $${pastDueExpectedThisMonth.toLocaleString(undefined,{maximumFractionDigits:0})} past-due)`;
-    }
-    monthlyPaceChange.textContent = breakdown;
+    const projectedRemaining = expectedPaymentsThisMonth + projectedNewSaleCash;
+    monthlyPaceChange.textContent = `$${totalRev.toLocaleString(undefined,{maximumFractionDigits:0})} collected + $${projectedRemaining.toLocaleString(undefined,{maximumFractionDigits:0})} projected`;
     monthlyPaceChange.className = 'scorecard-change neutral';
   }
 
