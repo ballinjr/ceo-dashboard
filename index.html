@@ -2757,6 +2757,7 @@ async function loadAllData() {
     appData = parseGvizRows(appTable);
     callData = parseGvizRows(callTable);
     salesData = parseGvizRows(salesTable);
+    neutralizePairedLostDisputes(salesData);
     notesData = parseGvizRows(notesTable);
 
     console.log(`[dashboard] Loaded: ${appData.length} apps, ${callData.length} calls, ${salesData.length} sales, ${notesData.length} notes`);
@@ -2837,10 +2838,59 @@ function isRealSaleRow(row) {
   return ((row['Email'] || '').toString().includes('@'));
 }
 
-// Money-out transaction rows: refunds, disputes, chargebacks
+// Money-out transaction rows: refunds, disputes, chargebacks.
+// NOTE: this deliberately matches "Won Dispute" too — dispute-family rows always net
+// out of AOV/units math (the client's ORIGINAL payment row is what counts there;
+// the dispute open/resolution rows are accounting noise for those metrics).
 function isNegativeTxn(row) {
   const tt = (row['Transaction Type'] || '').toString().toLowerCase();
   return tt.includes('refund') || tt.includes('dispute') || tt.includes('chargeback');
+}
+
+// Dispute lifecycle handling for NET REVENUE sums.
+// Sheet convention: "Dispute" (-X) is logged when a dispute opens (provisional loss),
+// then a resolution row follows:
+//   "Won Dispute"  (+X) — cancels the open Dispute row, so the pair nets to zero.
+//   "Lost Dispute" (-X) — but the loss was ALREADY booked by the open Dispute row,
+//                          so summing both double-counts the loss.
+// This pass pairs each resolution row with its open Dispute (same email + amount,
+// chronological) and zeroes the Amount of a PAIRED Lost Dispute in memory. Unpaired
+// Lost Disputes (logged without a prior Dispute row) keep their amount — they ARE the
+// loss. The Google Sheet itself is never modified.
+function neutralizePairedLostDisputes(salesRows) {
+  const groups = new Map();
+  (salesRows || []).forEach(r => {
+    const tt = (r['Transaction Type'] || '').toString().toLowerCase();
+    if (tt !== 'dispute' && tt !== 'lost dispute' && tt !== 'won dispute') return;
+    const k = ((r['Email'] || '').toString().trim().toLowerCase()) + '|' + Math.abs(parseFloat(r['Amount']) || 0);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  });
+  groups.forEach(list => {
+    list.sort((a, b) => {
+      const da = getDateField(a, ['Date']), db = getDateField(b, ['Date']);
+      const t = (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+      if (t !== 0) return t;
+      // same day: process the opening Dispute before its resolution row
+      const rank = r => ((r['Transaction Type'] || '').toLowerCase() === 'dispute' ? 0 : 1);
+      return rank(a) - rank(b);
+    });
+    let open = 0;
+    list.forEach(r => {
+      const tt = (r['Transaction Type'] || '').toLowerCase();
+      if (tt === 'dispute') {
+        open++;
+      } else if (open > 0) {
+        open--; // this resolution consumes an open Dispute
+        if (tt === 'lost dispute') {
+          r['_pairedLostDispute'] = true;
+          r['Amount'] = 0; // loss already booked by the open Dispute row
+        }
+        // a paired Won Dispute keeps its +X, cancelling the open Dispute's -X
+      }
+      // resolution with no open Dispute: keep as logged (it carries the real amount)
+    });
+  });
 }
 
 // First-ever Coaching purchase date per client email (used for "new client" units)
