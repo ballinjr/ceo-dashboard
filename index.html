@@ -1538,8 +1538,8 @@
         </div>
 
         <div class="chart-container" style="padding:18px; margin-bottom:16px;">
-          <div class="chart-title" style="margin-bottom:4px;">Coaching Only</div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Everything on this page is coaching. Downsell and LTO are stripped out before anything is calculated, and every recurring payment stays in.</div>
+          <div class="chart-title" style="margin-bottom:4px;">Client Economics</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Meta only. Revenue counts everything the ads brought in, and every recurring payment stays in. CAC and LTV below are coaching clients, since those are the ones the calls produce.</div>
           <div id="adsCacTable"></div>
         </div>
 
@@ -7523,9 +7523,10 @@ async function loadAdsTracking(force) {
       if (typeof h === 'number' && h > 0 && h <= 1) adsSheetSettings.hiShare = h;
       _share = adsSheetSettings.hiShare;
     }
-    // Strip low ticket once, here. Everything downstream is high ticket only, so the
-    // page never shows two different revenue figures for the same window.
-    adsMonthly.forEach(function (m) { m.revenueAll = m.revenue; m.revenue = m.revenue * _share; });
+    // Revenue is EVERYTHING the ads brought in. The ads sell the low ticket products
+    // too, so that money is part of what the spend returned and it stays in.
+    // `coaching` is kept alongside for the one place it belongs, the client economics.
+    adsMonthly.forEach(function (m) { m.revenueAll = m.revenue; m.coaching = m.revenue * _share; });
     console.log('[ads] Loaded ' + adsMonthly.length + ' months from Ads_Tracking, target ROAS ' + adsSheetSettings.targetRoas);
   } catch (err) {
     console.error('[ads] Failed to load Ads_Tracking:', err);
@@ -7559,10 +7560,11 @@ function adsRowsForWindow(n) {
 }
 
 function adsAgg(rows) {
-  const t = { months: rows.length, spend: 0, spendHyros: 0, impressions: 0, clicks: 0, calls: 0, sales: 0, revenue: 0, apps: 0, qualApps: 0, hqApps: 0, dqApps: 0, partials: 0, salesCalls: 0, coachingClients: 0, coachingRevSheet: 0 };
+  const t = { months: rows.length, spend: 0, spendHyros: 0, impressions: 0, clicks: 0, calls: 0, sales: 0, revenue: 0, coaching: 0, apps: 0, qualApps: 0, hqApps: 0, dqApps: 0, partials: 0, salesCalls: 0, coachingClients: 0, coachingRevSheet: 0 };
   rows.forEach(r => {
     t.spend += r.spend; t.spendHyros += r.spendHyros; t.impressions += r.impressions;
     t.clicks += r.clicks; t.calls += r.calls; t.sales += r.sales; t.revenue += r.revenue;
+    t.coaching += (r.coaching || 0);
     t.apps += r.apps; t.qualApps += r.qualApps; t.hqApps += r.hqApps;
     t.dqApps += r.dqApps; t.partials += r.partials; t.salesCalls += r.salesCalls;
     t.coachingClients += r.coachingClients; t.coachingRevSheet += r.coachingRevSheet;
@@ -7576,7 +7578,7 @@ function adsAgg(rows) {
 function adsUplift() {
   var base = adsAgg(adsRowsForWindow(12));
   if (!base.coachingRevSheet) return 1;
-  return base.revenue / base.coachingRevSheet;
+  return base.coaching / base.coachingRevSheet;   // coaching on both sides, same population
 }
 
 function adsRangeLabel(rows) {
@@ -7643,7 +7645,7 @@ async function renderAdsPerformance() {
   if (note) {
     note.innerHTML =
       '<strong>The targets below are set off ' + adsRangeLabel(baseRows) + '. The scorecards cover ' + adsRangeLabel(rows) + '.</strong><br>' +
-      'Always the trailing 12 complete months. Every two months, on the 1st, the two oldest months drop off and the two newest go on. ' +
+      'Meta only (Personal Brand Coaching). Always the trailing 12 complete months. Every two months, on the 1st, the two oldest months drop off and the two newest go on. ' +
       'Treat this page as the reference for what the numbers have to be, and judge individual ads and ad sets against it in Hyros.<br>' +
       'Spend for the scorecard window: <strong>' + adsMoney(agg.spend) + '</strong>' +
       (spendEdited
@@ -7734,7 +7736,8 @@ async function renderAdsPerformance() {
       '</tbody></table>' +
       adsEitherOr(target, costPerSalesCall, revPerSalesCall, cac, adsSheetSettings.ltv) +
       '<div style="color:var(--text-muted); font-size:11px; margin-top:10px; line-height:1.7;">' +
-      'Every figure on this page is coaching only. Downsell and LTO are stripped out before anything is calculated. Every recurring payment attributed to ads stays in, which is most of the business.<br>' +
+      'Revenue is everything the ads brought in, coaching plus the smaller products they also sell, and every recurring payment stays in. Coaching alone was ' + adsMoney(agg.coaching) + ' of it.<br>' +
+      'CAC and LTV are coaching clients only, since those are the clients the calls produce.<br>' +
       'CAC and the call figures use the same attribution basis, so they agree with the ROAS above. ROAS counts cash collected this window from every client still paying; CAC counts only the clients newly signed.</div>';
   }
 
