@@ -523,6 +523,7 @@
   <div class="sidebar-section">
     <div class="sidebar-section-title">Marketing</div>
     <a class="sidebar-item" data-page="mkt-overview"><span class="icon">📋</span> Overview</a>
+    <a class="sidebar-item" data-page="ads-perf"><span class="icon">📣</span> Ad Performance</a>
   </div>
   <div class="sidebar-section">
     <div class="sidebar-section-title">Applications</div>
@@ -1515,6 +1516,98 @@
 
       </div><!-- END page-mkt-overview -->
 
+      <!-- ======================== -->
+      <!-- Ad Performance Page -->
+      <!-- ======================== -->
+      <div class="dashboard-page" id="page-ads-perf" style="display:none;">
+
+        <div class="page-header-row">
+          <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+            <select id="adsWindow" class="filter-select" style="background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border-color); padding:8px 12px; border-radius:6px; font-size:13px;">
+              <option value="3">Last 3 complete months</option>
+              <option value="6">Last 6 complete months</option>
+              <option value="12" selected>Last 12 complete months</option>
+            </select>
+            <span id="adsWindowLabel" style="color:var(--text-secondary); font-size:12px;"></span>
+          </div>
+          <button class="export-btn" onclick="exportAdsPerformance()">Export CSV</button>
+        </div>
+
+        <div id="adsSourceNote" style="background:var(--bg-card); border:1px solid var(--border-color); border-left:3px solid var(--accent-blue); border-radius:6px; padding:10px 14px; margin-bottom:16px; font-size:12px; color:var(--text-secondary); line-height:1.6;">
+          Loading Ads_Tracking&hellip;
+        </div>
+
+        <div class="chart-container" style="padding:18px; margin-bottom:16px;">
+          <div class="chart-title" style="margin-bottom:4px;">What It Takes To Hit Target</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;" id="adsTargetIntro"></div>
+          <div style="display:flex; gap:20px; align-items:center; flex-wrap:wrap; margin-bottom:16px; font-size:12px; color:var(--text-secondary);">
+            <label>Target ROAS
+              <input type="number" id="adsTargetRoas" min="0.5" max="10" step="0.1" style="width:64px; margin-left:6px; background:var(--bg-dark); color:var(--text-primary); border:1px solid var(--border-color); border-radius:4px; padding:5px 8px; font-size:12px;">x
+            </label>
+            <button onclick="adsResetScenario()" style="background:transparent; color:var(--accent-blue); border:1px solid var(--border-color); border-radius:4px; padding:5px 10px; font-size:12px; cursor:pointer;">Reset to sheet</button>
+            <span id="adsScenarioNote"></span>
+          </div>
+          <div id="adsTargetTable"></div>
+        </div>
+
+        <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin:22px 0 10px 2px;">What the window produced</div>
+
+        <div class="scorecard-row" style="grid-template-columns:repeat(8,1fr); margin-bottom:8px;">
+          <div class="scorecard"><div class="scorecard-label">Ad Spend</div><div class="scorecard-value" id="adsSpend">&mdash;</div><div class="scorecard-change neutral" id="adsSpendNote"></div></div>
+          <div class="scorecard"><div class="scorecard-label">Revenue</div><div class="scorecard-value" id="adsRevenue">&mdash;</div><div class="scorecard-change neutral" id="adsRevenueNote"></div></div>
+          <div class="scorecard"><div class="scorecard-label">ROAS</div><div class="scorecard-value" id="adsRoas">&mdash;</div><div class="scorecard-change neutral" id="adsRoasNote"></div></div>
+          <div class="scorecard"><div class="scorecard-label">Applications</div><div class="scorecard-value" id="adsApps">&mdash;</div><div class="scorecard-change neutral">all tags</div></div>
+          <div class="scorecard"><div class="scorecard-label">Qualified Apps</div><div class="scorecard-value" id="adsQualApps">&mdash;</div><div class="scorecard-change neutral" id="adsQualRate"></div></div>
+          <div class="scorecard"><div class="scorecard-label">High Quality Apps</div><div class="scorecard-value" id="adsHqApps">&mdash;</div><div class="scorecard-change neutral" id="adsHqRate"></div></div>
+          <div class="scorecard"><div class="scorecard-label">DQ Apps</div><div class="scorecard-value" id="adsDqApps">&mdash;</div><div class="scorecard-change neutral" id="adsDqRate"></div></div>
+          <div class="scorecard"><div class="scorecard-label">Clicks</div><div class="scorecard-value" id="adsClicks">&mdash;</div><div class="scorecard-change neutral" id="adsCpClick"></div></div>
+        </div>
+
+        <div class="scorecard-row" style="grid-template-columns:repeat(8,1fr); margin-bottom:16px;">
+          <div class="scorecard"><div class="scorecard-label">Cost / Application</div><div class="scorecard-value" id="adsCpa">&mdash;</div><div class="scorecard-change neutral">all tags</div></div>
+          <div class="scorecard"><div class="scorecard-label">Cost / Qualified App</div><div class="scorecard-value" id="adsCpQual">&mdash;</div><div class="scorecard-change neutral">HQ + LQ</div></div>
+          <div class="scorecard"><div class="scorecard-label">Cost / HQ App</div><div class="scorecard-value" id="adsCpHq">&mdash;</div><div class="scorecard-change neutral">HQ only</div></div>
+          <div class="scorecard"><div class="scorecard-label">Sales Calls</div><div class="scorecard-value" id="adsSalesCalls">&mdash;</div><div class="scorecard-change neutral">1C + 2C</div></div>
+          <div class="scorecard"><div class="scorecard-label">Cost / Sales Call</div><div class="scorecard-value" id="adsCpSc">&mdash;</div><div class="scorecard-change neutral"></div></div>
+          <div class="scorecard"><div class="scorecard-label">Calls (Hyros)</div><div class="scorecard-value" id="adsCalls">&mdash;</div><div class="scorecard-change neutral" id="adsCpc"></div></div>
+          <div class="scorecard"><div class="scorecard-label">Sales</div><div class="scorecard-value" id="adsSales">&mdash;</div><div class="scorecard-change neutral" id="adsSalesNote"></div></div>
+          <div class="scorecard"><div class="scorecard-label">Cost / Sale</div><div class="scorecard-value" id="adsCps">&mdash;</div><div class="scorecard-change neutral"></div></div>
+        </div>
+
+        <div class="scorecard-row" style="grid-template-columns:repeat(8,1fr); margin-bottom:16px;">
+          <div class="scorecard"><div class="scorecard-label">Revenue / Application</div><div class="scorecard-value" id="adsRevApp">&mdash;</div><div class="scorecard-change neutral">all tags</div></div>
+          <div class="scorecard"><div class="scorecard-label">Revenue / Qualified App</div><div class="scorecard-value" id="adsRevQual">&mdash;</div><div class="scorecard-change neutral">HQ + LQ</div></div>
+          <div class="scorecard"><div class="scorecard-label">Revenue / HQ App</div><div class="scorecard-value" id="adsRevHq">&mdash;</div><div class="scorecard-change neutral">HQ only</div></div>
+          <div class="scorecard"><div class="scorecard-label">Revenue / Sales Call</div><div class="scorecard-value" id="adsRevSc">&mdash;</div><div class="scorecard-change neutral">1C + 2C</div></div>
+          <div class="scorecard"><div class="scorecard-label">Revenue / Call</div><div class="scorecard-value" id="adsRevCall">&mdash;</div><div class="scorecard-change neutral">incl. triage</div></div>
+          <div class="scorecard"><div class="scorecard-label">Revenue / Sale</div><div class="scorecard-value" id="adsRevSale">&mdash;</div><div class="scorecard-change neutral">what a client is worth</div></div>
+          <div class="scorecard"><div class="scorecard-label">Revenue / Click</div><div class="scorecard-value" id="adsRevClick">&mdash;</div><div class="scorecard-change neutral">top of funnel</div></div>
+          <div class="scorecard"><div class="scorecard-label">Cost / Click</div><div class="scorecard-value" id="adsCpClick2">&mdash;</div><div class="scorecard-change neutral"></div></div>
+        </div>
+
+        <div class="chart-container" style="padding:16px; margin-top:12px;">
+          <div class="chart-title">Cost per Step by Month, Against the Targets</div>
+          <canvas id="adsCostChart" height="80"></canvas>
+        </div>
+
+        <div class="chart-container" style="padding:16px; margin-top:12px;">
+          <div class="chart-title">Spend and Revenue by Month</div>
+          <canvas id="adsSpendRevChart" height="80"></canvas>
+        </div>
+
+        <div class="chart-container" style="padding:16px; margin-top:12px;">
+          <div class="chart-title">Volume by Month</div>
+          <canvas id="adsVolumeChart" height="80"></canvas>
+        </div>
+
+        <div class="chart-container" style="padding:16px; margin-top:12px;">
+          <div class="chart-title">How These Numbers Are Built</div>
+          <div id="adsNotes" style="font-size:12px; color:var(--text-secondary); line-height:1.75;"></div>
+        </div>
+
+      </div><!-- END page-ads-perf -->
+
+
       <!-- Application Overview Page -->
       <div class="dashboard-page" id="page-app-overview" style="display:none;">
       <div class="page-header-row"><button class="export-btn" onclick="exportAppOverview()">Export CSV</button></div>
@@ -2429,6 +2522,7 @@ function showPage(pageId) {
     'downsell-rev': 'Downsell Revenue',
     'lto-rev': 'LTO Revenue',
     'mkt-overview': 'Marketing Overview',
+    'ads-perf': 'Ad Performance',
     'app-overview': 'Applications Overview',
     'app-attribution': 'Application Attribution',
     'sales-overview': 'Sales Team Call Overview',
@@ -2451,6 +2545,10 @@ function showPage(pageId) {
   if (rightSidebar) {
     rightSidebar.style.display = pageId === 'mtd-overview' ? 'block' : 'none';
   }
+  const globalDates = document.querySelector('.topbar .date-picker');
+  const compareBar = document.getElementById('compareBar');
+  if (globalDates) globalDates.style.display = (pageId === 'ads-perf') ? 'none' : '';
+  if (compareBar) compareBar.style.display = (pageId === 'ads-perf') ? 'none' : '';
   // Trigger page-specific rendering
   if (pageId === 'ytd-rev') renderYTDPage();
   if (pageId === 'rev-overview') renderRevenueOverview();
@@ -2458,6 +2556,7 @@ function showPage(pageId) {
   if (pageId === 'downsell-rev') renderDownsellRevenue();
   if (pageId === 'lto-rev') renderLtoRevenue();
   if (pageId === 'mkt-overview') renderMarketingOverview();
+  if (pageId === 'ads-perf') renderAdsPerformance();
   if (pageId === 'app-overview') renderApplicationOverview();
   if (pageId === 'app-attribution') renderAppAttribution();
   if (pageId === 'sales-overview') renderSalesOverview();
@@ -2662,11 +2761,11 @@ function clearAllDeltas() {
 // ====================
 let _gvizCallbackId = 0;
 
-function fetchGviz(sheetName, query) {
+function fetchGviz(sheetName, query, extraParams) {
   return new Promise((resolve, reject) => {
     const cbName = '_gvizCb' + (++_gvizCallbackId);
     const encoded = encodeURIComponent(query);
-    const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tq=${encoded}&sheet=${encodeURIComponent(sheetName)}&tqx=responseHandler:${cbName}`;
+    const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tq=${encoded}&sheet=${encodeURIComponent(sheetName)}&tqx=responseHandler:${cbName}` + (extraParams || '');
     console.log(`[gviz] Fetching ${sheetName} via JSONP: ${url.substring(0, 150)}...`);
 
     const timeout = setTimeout(() => {
@@ -3947,6 +4046,7 @@ function computeAndRender() {
   if (_currentPage === 'downsell-rev') renderDownsellRevenue();
   if (_currentPage === 'lto-rev') renderLtoRevenue();
   if (_currentPage === 'mkt-overview') renderMarketingOverview();
+  if (_currentPage === 'ads-perf') renderAdsPerformance();
   if (_currentPage === 'app-overview') renderApplicationOverview();
   if (_currentPage === 'app-attribution') renderAppAttribution();
   if (_currentPage === 'sales-overview') renderSalesOverview();
@@ -7273,6 +7373,363 @@ function renderAaAttrTable() {
   html += '</tbody></table>';
   html += '<div style="color:var(--text-muted); font-size:11px; margin-top:4px;">Δ = change vs previous period of same length (' + (prevStart.getMonth()+1) + '/' + prevStart.getDate() + ' – ' + (prevEnd.getMonth()+1) + '/' + prevEnd.getDate() + ')</div>';
   document.getElementById('aaAttrTable').innerHTML = html;
+}
+
+// ====================
+// Ad Performance Page
+// ====================
+// Reads the Ads_Tracking tab. Hyros supplies spend, clicks, calls, sales and revenue.
+// The workbook supplies application counts and sales calls, which Hyros has no concept of.
+// The job of this page is to state the numbers the ads have to hit. Judging a given ad
+// or ad set against them happens in Hyros.
+let adsMonthly = null;
+let adsSheetSettings = { targetRoas: 2 };
+let _adsLoading = false;
+let _adsError = null;
+
+function adsMoney(v, dp) {
+  if (v === null || v === undefined || !isFinite(v)) return '—';
+  const d = (dp === undefined) ? 0 : dp;
+  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+function adsNum(v, dp) {
+  if (v === null || v === undefined || !isFinite(v)) return '—';
+  return v.toLocaleString(undefined, { minimumFractionDigits: dp || 0, maximumFractionDigits: dp || 0 });
+}
+function adsX(v) { return isFinite(v) ? v.toFixed(2) + 'x' : '—'; }
+function adsPct(v) { return isFinite(v) ? (v * 100).toFixed(0) + '%' : '—'; }
+function adsMonthLabel(d) { return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); }
+
+async function loadAdsTracking(force) {
+  if (_adsLoading) return;
+  if (adsMonthly && !force) return;
+  _adsLoading = true;
+  _adsError = null;
+  try {
+    const [mTable, sTable] = await Promise.all([
+      fetchGviz('Ads_Tracking', 'SELECT *', '&range=A12:O200&headers=1'),
+      fetchGviz('Ads_Tracking', 'SELECT *', '&range=A7:B7&headers=0')
+    ]);
+
+    const raw = parseGvizRows(mTable);
+    adsMonthly = raw
+      .filter(r => r['Month Start'] instanceof Date)
+      .map(r => ({
+        label: (r['Month'] || '').toString(),
+        start: r['Month Start'],
+        spendHyros: Number(r['Spend (Hyros)']) || 0,
+        spend: Number(r['Spend (Actual) - EDIT']) || 0,
+        impressions: Number(r['Impressions']) || 0,
+        clicks: Number(r['Clicks']) || 0,
+        calls: Number(r['Calls (Hyros)']) || 0,
+        sales: Number(r['Sales (Hyros)']) || 0,
+        revenue: Number(r['Revenue (Hyros)']) || 0,
+        apps: Number(r['Applications (All)']) || 0,
+        qualApps: Number(r['Qualified Apps (HQ+LQ)']) || 0,
+        hqApps: Number(r['High Quality Apps (HQ)']) || 0,
+        dqApps: Number(r['DQ Apps']) || 0,
+        partials: Number(r['Partial Submits']) || 0,
+        salesCalls: Number(r['Sales Calls (Ads)']) || 0
+      }))
+      .sort((a, b) => a.start - b.start);
+
+    if (sTable && sTable.rows && sTable.rows[0] && sTable.rows[0].c[1]) {
+      const t = sTable.rows[0].c[1].v;
+      if (typeof t === 'number' && t > 0) adsSheetSettings.targetRoas = t;
+    }
+    console.log('[ads] Loaded ' + adsMonthly.length + ' months from Ads_Tracking, target ROAS ' + adsSheetSettings.targetRoas);
+  } catch (err) {
+    console.error('[ads] Failed to load Ads_Tracking:', err);
+    _adsError = err;
+  } finally {
+    _adsLoading = false;
+  }
+}
+
+function adsResetScenario() {
+  const ti = document.getElementById('adsTargetRoas');
+  if (ti) { ti.value = adsSheetSettings.targetRoas; delete ti.dataset.touched; }
+  renderAdsPerformance();
+}
+
+function adsTargetRoas() {
+  const t = parseFloat((document.getElementById('adsTargetRoas') || {}).value);
+  return (isFinite(t) && t > 0) ? t : adsSheetSettings.targetRoas;
+}
+
+function adsCurrentMonthStart() {
+  const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d;
+}
+
+function adsRowsForWindow(n) {
+  if (!adsMonthly) return [];
+  const cm = adsCurrentMonthStart();
+  if (!n) return adsMonthly.slice();
+  const from = new Date(cm); from.setMonth(from.getMonth() - n);
+  return adsMonthly.filter(r => r.start >= from && r.start < cm);
+}
+
+function adsAgg(rows) {
+  const t = { months: rows.length, spend: 0, spendHyros: 0, impressions: 0, clicks: 0, calls: 0, sales: 0, revenue: 0, apps: 0, qualApps: 0, hqApps: 0, dqApps: 0, partials: 0, salesCalls: 0 };
+  rows.forEach(r => {
+    t.spend += r.spend; t.spendHyros += r.spendHyros; t.impressions += r.impressions;
+    t.clicks += r.clicks; t.calls += r.calls; t.sales += r.sales; t.revenue += r.revenue;
+    t.apps += r.apps; t.qualApps += r.qualApps; t.hqApps += r.hqApps;
+    t.dqApps += r.dqApps; t.partials += r.partials; t.salesCalls += r.salesCalls;
+  });
+  return t;
+}
+
+function adsRangeLabel(rows) {
+  if (!rows.length) return 'no months';
+  return adsMonthLabel(rows[0].start) + ' to ' + adsMonthLabel(rows[rows.length - 1].start);
+}
+
+// Targets always come off the last 12 complete months. Revenue per call needs volume
+// behind it, and a 3-month sample of a lagged revenue line swings too hard to set a
+// target from.
+function adsCeilings(targetRoas) {
+  const base = adsAgg(adsRowsForWindow(12));
+  const ceilSpend = base.revenue / targetRoas;
+  return {
+    base: base,
+    ceilSpend: ceilSpend,
+    perCall: base.calls ? ceilSpend / base.calls : NaN,
+    perApp: base.apps ? ceilSpend / base.apps : NaN,
+    perQualApp: base.qualApps ? ceilSpend / base.qualApps : NaN,
+    perHqApp: base.hqApps ? ceilSpend / base.hqApps : NaN,
+    perSalesCall: base.salesCalls ? ceilSpend / base.salesCalls : NaN,
+    perSale: base.sales ? ceilSpend / base.sales : NaN,
+    perClick: base.clicks ? ceilSpend / base.clicks : NaN
+  };
+}
+
+async function renderAdsPerformance() {
+  if (!adsMonthly && !_adsLoading) await loadAdsTracking();
+
+  const note = document.getElementById('adsSourceNote');
+  if (_adsError || !adsMonthly || !adsMonthly.length) {
+    if (note) note.innerHTML = '<span style="color:var(--accent-red);">Could not read the <strong>Ads_Tracking</strong> tab of the workbook.</span> Check that the tab still exists and the sheet is shared as "Anyone with the link can view", then reload.';
+    return;
+  }
+
+  const ti = document.getElementById('adsTargetRoas');
+  if (ti && !ti.value) ti.value = adsSheetSettings.targetRoas;
+  if (ti && !ti.oninput) ti.oninput = function () { this.dataset.touched = '1'; renderAdsPerformance(); };
+  const sel = document.getElementById('adsWindow');
+  if (sel && !sel.onchange) sel.onchange = () => renderAdsPerformance();
+
+  const target = adsTargetRoas();
+  const n = parseInt((sel || {}).value || '12', 10);
+  const rows = adsRowsForWindow(n);
+  const agg = adsAgg(rows);
+  const ceil = adsCeilings(target);
+  const base = ceil.base;
+  const baseRows = adsRowsForWindow(12);
+  const spendEdited = Math.abs(agg.spend - agg.spendHyros) > 0.5;
+
+  document.getElementById('adsWindowLabel').textContent = rows.length
+    ? rows.length + ' months  ·  ' + adsRangeLabel(rows)
+    : 'no months in this window';
+
+  if (note) {
+    note.innerHTML =
+      '<strong>The targets below are set off ' + adsRangeLabel(baseRows) + '. The scorecards cover ' + adsRangeLabel(rows) + '.</strong><br>' +
+      'Always the trailing 12 complete months. Every two months, on the 1st, the two oldest months drop off and the two newest go on. ' +
+      'Treat this page as the reference for what the numbers have to be, and judge individual ads and ad sets against it in Hyros.<br>' +
+      'Spend for the scorecard window: <strong>' + adsMoney(agg.spend) + '</strong>' +
+      (spendEdited
+        ? ' (entered by hand; Hyros recorded ' + adsMoney(agg.spendHyros) + ' on conversion campaigns).'
+        : ' (straight from Hyros, which only sees conversion-based campaigns. If you ran anything else, put the real number in column D of the <strong>Ads_Tracking</strong> tab and every figure here moves with it).');
+  }
+
+  // ---- Target table: the numbers, with no verdict attached ----
+  document.getElementById('adsTargetIntro').innerHTML =
+    'Over ' + adsRangeLabel(baseRows) + ' the ads brought in ' + adsMoney(base.revenue) +
+    '. To return ' + adsX(target) + ' on that, total spend has to stay at or under <strong style="color:var(--text-primary);">' + adsMoney(ceil.ceilSpend) +
+    '</strong>. Divide that ceiling by what those months produced and you get the number each step has to hit.';
+
+  const per = v => v ? base.revenue / v : NaN;
+  const tRows = [
+    ['Application', per(base.apps), ceil.perApp, base.apps, 'applications', 'every tag, including DQ'],
+    ['Qualified application', per(base.qualApps), ceil.perQualApp, base.qualApps, 'qualified apps', 'HQ Book A Call plus LQ Book A Call'],
+    ['High quality application', per(base.hqApps), ceil.perHqApp, base.hqApps, 'HQ apps', 'HQ Book A Call only'],
+    ['Sales call', per(base.salesCalls), ceil.perSalesCall, base.salesCalls, 'sales calls', '1C and 2C, triage excluded'],
+    ['Call', per(base.calls), ceil.perCall, base.calls, 'calls', 'every call Hyros traces to an ad click'],
+    ['Sale', per(base.sales), ceil.perSale, base.sales, 'sales', 'what a closed client is worth'],
+    ['Click', per(base.clicks), ceil.perClick, base.clicks, 'clicks', 'the top of the funnel']
+  ];
+  let th = '<table class="data-table"><thead><tr>' +
+    '<th>Step</th><th style="text-align:right;">What it is worth</th><th style="text-align:right;">What it can cost</th>' +
+    '<th style="text-align:right;">12-month volume</th><th>What counts</th></tr></thead><tbody>';
+  tRows.forEach(r => {
+    const dp = v => (v < 10 ? 2 : 0);
+    th += '<tr><td>' + r[0] + '</td>' +
+      '<td style="text-align:right; font-weight:600; color:var(--text-primary);">' + adsMoney(r[1], dp(r[1])) + '</td>' +
+      '<td style="text-align:right; font-weight:700; color:var(--accent-teal); font-size:14px;">' + adsMoney(r[2], dp(r[2])) + '</td>' +
+      '<td style="text-align:right; color:var(--text-secondary);">' + adsNum(r[3]) + ' ' + r[4] + '</td>' +
+      '<td style="color:var(--text-muted);">' + r[5] + '</td></tr>';
+  });
+  th += '</tbody></table>' +
+    '<div style="color:var(--text-muted); font-size:11px; margin-top:10px;">"What it is worth" is ' + adsMoney(base.revenue) + ' of revenue divided by how many of that step the twelve months produced. "What it can cost" is that figure divided by the target ROAS.</div>';
+  document.getElementById('adsTargetTable').innerHTML = th;
+
+  const scNote = document.getElementById('adsScenarioNote');
+  if (scNote) {
+    const changed = Math.abs(target - adsSheetSettings.targetRoas) > 0.001;
+    scNote.innerHTML = changed
+      ? '<span style="color:#f59e0b;">Scenario only. The sheet still says ' + adsX(adsSheetSettings.targetRoas) + '.</span>'
+      : '<span style="color:var(--text-muted);">Matching the sheet.</span>';
+  }
+
+  // ---- Scorecards ----
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val; };
+
+  set('adsSpend', adsMoney(agg.spend));
+  set('adsSpendNote', spendEdited ? 'your number' : 'from Hyros');
+  set('adsRevenue', adsMoney(agg.revenue));
+  set('adsRevenueNote', agg.months + ' months');
+  set('adsRoas', adsX(agg.spend ? agg.revenue / agg.spend : NaN));
+  set('adsRoasNote', 'target ' + adsX(target));
+  set('adsApps', adsNum(agg.apps));
+  set('adsQualApps', adsNum(agg.qualApps));
+  set('adsQualRate', agg.apps ? adsPct(agg.qualApps / agg.apps) + ' of apps' : '');
+  set('adsHqApps', adsNum(agg.hqApps));
+  set('adsHqRate', agg.apps ? adsPct(agg.hqApps / agg.apps) + ' of apps' : '');
+  set('adsDqApps', adsNum(agg.dqApps));
+  set('adsDqRate', agg.apps ? adsPct(agg.dqApps / agg.apps) + ' of apps' : '');
+  set('adsClicks', adsNum(agg.clicks));
+  set('adsCpClick', agg.clicks ? adsMoney(agg.spend / agg.clicks, 2) + ' per click' : '');
+  set('adsCpa', adsMoney(agg.apps ? agg.spend / agg.apps : NaN));
+  set('adsCpQual', adsMoney(agg.qualApps ? agg.spend / agg.qualApps : NaN));
+  set('adsCpHq', adsMoney(agg.hqApps ? agg.spend / agg.hqApps : NaN));
+  set('adsSalesCalls', adsNum(agg.salesCalls));
+  set('adsCpSc', adsMoney(agg.salesCalls ? agg.spend / agg.salesCalls : NaN));
+  set('adsCalls', adsNum(agg.calls));
+  set('adsCpc', agg.calls ? adsMoney(agg.spend / agg.calls) + ' per call' : '');
+  set('adsSales', adsNum(agg.sales));
+  set('adsSalesNote', agg.sales ? adsMoney(agg.revenue / agg.sales) + ' per sale' : '');
+  set('adsCps', adsMoney(agg.sales ? agg.spend / agg.sales : NaN));
+
+  const rev = v => adsMoney(v ? agg.revenue / v : NaN);
+  set('adsRevApp', rev(agg.apps));
+  set('adsRevQual', rev(agg.qualApps));
+  set('adsRevHq', rev(agg.hqApps));
+  set('adsRevSc', rev(agg.salesCalls));
+  set('adsRevCall', rev(agg.calls));
+  set('adsRevSale', rev(agg.sales));
+  set('adsRevClick', agg.clicks ? adsMoney(agg.revenue / agg.clicks, 2) : '—');
+  set('adsCpClick2', agg.clicks ? adsMoney(agg.spend / agg.clicks, 2) : '—');
+
+  renderAdsCharts(rows, ceil);
+  renderAdsNotes();
+}
+
+function renderAdsCharts(rows, ceil) {
+  const labels = rows.map(r => adsMonthLabel(r.start));
+  const axis = { ticks: { color: '#8b92a5', font: { size: 10 } }, grid: { color: '#2d3348' } };
+
+  const ceilLine = (val, color, text, pos) => ({
+    type: 'line', yMin: val, yMax: val,
+    borderColor: color, borderWidth: 1, borderDash: [5, 4],
+    label: { display: true, content: text + ' ' + adsMoney(val), position: pos, color: color, backgroundColor: 'rgba(26,31,46,0.85)', font: { size: 10 } }
+  });
+
+  if (chartInstances.adsCost) chartInstances.adsCost.destroy();
+  chartInstances.adsCost = new Chart(document.getElementById('adsCostChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Cost per call', data: rows.map(r => r.calls ? r.spend / r.calls : null), borderColor: '#3b82f6', backgroundColor: '#3b82f6', tension: 0.25, spanGaps: true },
+        { label: 'Cost per qualified app', data: rows.map(r => r.qualApps ? r.spend / r.qualApps : null), borderColor: '#4ec9b0', backgroundColor: '#4ec9b0', tension: 0.25, spanGaps: true },
+        { label: 'Cost per application', data: rows.map(r => r.apps ? r.spend / r.apps : null), borderColor: '#a78bfa', backgroundColor: '#a78bfa', tension: 0.25, spanGaps: true }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: { x: axis, y: { beginAtZero: true, ticks: { color: '#8b92a5', callback: v => '$' + v }, grid: { color: '#2d3348' } } },
+      plugins: {
+        legend: { labels: { color: '#e8eaf0', font: { size: 11 } }, position: 'top' },
+        annotation: {
+          annotations: {
+            callCeil: ceilLine(ceil.perCall, '#3b82f6', 'Call target', 'start'),
+            qualCeil: ceilLine(ceil.perQualApp, '#4ec9b0', 'Qualified app target', 'center'),
+            appCeil: ceilLine(ceil.perApp, '#a78bfa', 'App target', 'end')
+          }
+        }
+      }
+    }
+  });
+
+  if (chartInstances.adsSpendRev) chartInstances.adsSpendRev.destroy();
+  chartInstances.adsSpendRev = new Chart(document.getElementById('adsSpendRevChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Spend', data: rows.map(r => r.spend), backgroundColor: '#3b82f6', borderWidth: 0 },
+        { label: 'Revenue', data: rows.map(r => r.revenue), backgroundColor: '#4ec9b0', borderWidth: 0 }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: { x: axis, y: { beginAtZero: true, ticks: { color: '#8b92a5', callback: v => '$' + (v / 1000) + 'k' }, grid: { color: '#2d3348' } } },
+      plugins: { legend: { labels: { color: '#e8eaf0', font: { size: 11 } }, position: 'top' } }
+    }
+  });
+
+  if (chartInstances.adsVolume) chartInstances.adsVolume.destroy();
+  chartInstances.adsVolume = new Chart(document.getElementById('adsVolumeChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Qualified apps', data: rows.map(r => r.qualApps), backgroundColor: '#4ec9b0', borderWidth: 0 },
+        { label: 'High quality apps', data: rows.map(r => r.hqApps), backgroundColor: '#a78bfa', borderWidth: 0 },
+        { label: 'Sales calls', data: rows.map(r => r.salesCalls), backgroundColor: '#3b82f6', borderWidth: 0 },
+        { label: 'Sales', data: rows.map(r => r.sales), backgroundColor: '#f59e0b', borderWidth: 0 }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: { x: axis, y: { beginAtZero: true, ticks: { color: '#8b92a5' }, grid: { color: '#2d3348' } } },
+      plugins: { legend: { labels: { color: '#e8eaf0', font: { size: 11 } }, position: 'top' } }
+    }
+  });
+}
+
+function renderAdsNotes() {
+  const el = document.getElementById('adsNotes');
+  if (!el) return;
+  el.innerHTML =
+    '<p style="margin:0 0 10px 0;"><strong style="color:var(--text-primary);">What this page is for.</strong> It sets the numbers the ads have to hit and shows the twelve months of trading those numbers came from. Deciding whether a particular ad or ad set is pulling its weight happens in Hyros, against these figures.</p>' +
+    '<p style="margin:0 0 10px 0;"><strong style="color:var(--text-primary);">Where each number comes from.</strong> Spend, impressions, clicks, calls, sales and revenue are Hyros, on scientific attribution with paid sources prioritised. Hyros follows a person from the ad click through to the payment, which is why it is the authority on how the ads are doing. Application counts and sales calls are counted out of App_Log and Call_Log in the workbook, because Hyros has no idea what an application is.</p>' +
+    '<p style="margin:0 0 10px 0;"><strong style="color:var(--text-primary);">Always the trailing twelve complete months.</strong> A scheduled task runs on the 1st every two months: it drops the two oldest months, adds the two newest, and re-pulls Hyros for the whole window. The current partial month never appears. Between runs the numbers sit still, which is the point of a reference.</p>' +
+    '<p style="margin:0 0 10px 0;"><strong style="color:var(--text-primary);">Three tiers of application.</strong> Applications counts every App_Log row with Channel = Ads. Qualified apps are the ones tagged HQ Book A Call or LQ Book A Call. High quality apps are HQ Book A Call on its own. DQ is its own tag and is never counted as qualified. Partial submits are people who started an application and never finished it.</p>' +
+    '<p style="margin:0 0 10px 0;"><strong style="color:var(--text-primary);">Channel, never Platform.</strong> Anyone arriving from Meta is logged with Platform = Instagram, so filtering on platform would quietly mix paid and organic. Channel is the clean cut.</p>' +
+    '<p style="margin:0 0 10px 0;"><strong style="color:var(--text-primary);">Two different call counts, on purpose.</strong> Sales calls are Call_Log rows tagged 1C Sales Call or 2C Sales Call with Channel = Ads, counted on the date they were scheduled. Calls (Hyros) is wider: every call Hyros can trace back to an ad click, triage included. Cost per sales call is the tighter number, cost per call is the one that lines up with the Hyros dashboard.</p>' +
+    '<p style="margin:0;"><strong style="color:var(--text-primary);">Revenue is everything collected.</strong> Payment plan installments included, which is how the offer is sold. One consequence: cash landing in a month came partly from spend in earlier months, so a single month\'s ROAS is lagged against its own spend. That is why the targets are set off twelve months rather than three.</p>';
+}
+
+function exportAdsPerformance() {
+  if (!adsMonthly) return;
+  const sel = document.getElementById('adsWindow');
+  const n = parseInt((sel || {}).value || '12', 10);
+  const rows = adsRowsForWindow(n);
+  const headers = ['Month', 'Spend', 'Spend (Hyros)', 'Impressions', 'Clicks', 'Applications', 'Qualified Apps', 'High Quality Apps', 'DQ Apps', 'Partial Submits', 'Sales Calls', 'Calls (Hyros)', 'Sales', 'Revenue', 'Cost per Application', 'Cost per Qualified App', 'Cost per HQ App', 'Cost per Sales Call', 'Cost per Call', 'Revenue per Call', 'ROAS'];
+  const out = rows.map(r => [
+    adsMonthLabel(r.start), r.spend.toFixed(2), r.spendHyros.toFixed(2), r.impressions, r.clicks,
+    r.apps, r.qualApps, r.hqApps, r.dqApps, r.partials, r.salesCalls, r.calls, r.sales, r.revenue.toFixed(2),
+    r.apps ? (r.spend / r.apps).toFixed(2) : '',
+    r.qualApps ? (r.spend / r.qualApps).toFixed(2) : '',
+    r.hqApps ? (r.spend / r.hqApps).toFixed(2) : '',
+    r.salesCalls ? (r.spend / r.salesCalls).toFixed(2) : '',
+    r.calls ? (r.spend / r.calls).toFixed(2) : '',
+    r.calls ? (r.revenue / r.calls).toFixed(2) : '',
+    r.spend ? (r.revenue / r.spend).toFixed(2) : ''
+  ]);
+  downloadCSV('Ad_Performance_' + adsRangeLabel(rows).replace(/\s+/g, '_') + '.csv', buildCSV(headers, out));
 }
 
 // ====================
