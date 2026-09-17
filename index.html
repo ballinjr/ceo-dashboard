@@ -1538,8 +1538,8 @@
         </div>
 
         <div class="chart-container" style="padding:18px; margin-bottom:16px;">
-          <div class="chart-title" style="margin-bottom:4px;">Client Economics</div>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Meta only. Revenue counts everything the ads brought in, and every recurring payment stays in. CAC and LTV below are coaching clients, since those are the ones the calls produce.</div>
+          <div class="chart-title" style="margin-bottom:4px;" id="adsScopeTitle">&nbsp;</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;" id="adsScopeNote">&nbsp;</div>
           <div id="adsCacTable"></div>
         </div>
 
@@ -7390,7 +7390,7 @@ function renderAaAttrTable() {
 // The job of this page is to state the numbers the ads have to hit. Judging a given ad
 // or ad set against them happens in Hyros.
 let adsMonthly = null;
-let adsSheetSettings = { targetRoas: 2, ltv: 6860, hiShare: 0.948 };
+let adsSheetSettings = { targetRoas: 2, ltv: 6860, hiShare: 0.9533 };  // Meta only; B10 overrides
 let _adsLoading = false;
 let _adsError = null;
 let adsSpendFallback = [];   // months where column D was empty and C was used instead
@@ -7523,10 +7523,20 @@ async function loadAdsTracking(force) {
       if (typeof h === 'number' && h > 0 && h <= 1) adsSheetSettings.hiShare = h;
       _share = adsSheetSettings.hiShare;
     }
-    // Revenue is EVERYTHING the ads brought in. The ads sell the low ticket products
-    // too, so that money is part of what the spend returned and it stays in.
-    // `coaching` is kept alongside for the one place it belongs, the client economics.
-    adsMonthly.forEach(function (m) { m.revenueAll = m.revenue; m.coaching = m.revenue * _share; });
+    // WHAT COUNTS AS REVENUE IS A SHEET SETTING, NOT CODE.
+    // B10 is the coaching share of ad revenue. Set it to the measured share
+    // (0.9533 on Meta) and the page reports coaching only, which is the default
+    // because the page exists to track getting high ticket clients in and
+    // counting the smaller products flatters that. Set B10 to 1 and the page
+    // reports everything the ads brought in. Nothing here needs redeploying to
+    // switch: change the one cell and reload.
+    // Recurring payments always stay in either way. Payment plans are the business.
+    adsSheetSettings.coachingOnly = _share < 0.999;
+    adsMonthly.forEach(function (m) {
+      m.revenueAll = m.revenue;        // everything the ads brought in
+      m.revenue = m.revenue * _share;  // what the page reports
+      m.coaching = m.revenue;
+    });
     console.log('[ads] Loaded ' + adsMonthly.length + ' months from Ads_Tracking, target ROAS ' + adsSheetSettings.targetRoas);
   } catch (err) {
     console.error('[ads] Failed to load Ads_Tracking:', err);
@@ -7560,11 +7570,11 @@ function adsRowsForWindow(n) {
 }
 
 function adsAgg(rows) {
-  const t = { months: rows.length, spend: 0, spendHyros: 0, impressions: 0, clicks: 0, calls: 0, sales: 0, revenue: 0, coaching: 0, apps: 0, qualApps: 0, hqApps: 0, dqApps: 0, partials: 0, salesCalls: 0, coachingClients: 0, coachingRevSheet: 0 };
+  const t = { months: rows.length, spend: 0, spendHyros: 0, impressions: 0, clicks: 0, calls: 0, sales: 0, revenue: 0, coaching: 0, revenueAll: 0, apps: 0, qualApps: 0, hqApps: 0, dqApps: 0, partials: 0, salesCalls: 0, coachingClients: 0, coachingRevSheet: 0 };
   rows.forEach(r => {
     t.spend += r.spend; t.spendHyros += r.spendHyros; t.impressions += r.impressions;
     t.clicks += r.clicks; t.calls += r.calls; t.sales += r.sales; t.revenue += r.revenue;
-    t.coaching += (r.coaching || 0);
+    t.coaching += (r.coaching || 0); t.revenueAll += (r.revenueAll || 0);
     t.apps += r.apps; t.qualApps += r.qualApps; t.hqApps += r.hqApps;
     t.dqApps += r.dqApps; t.partials += r.partials; t.salesCalls += r.salesCalls;
     t.coachingClients += r.coachingClients; t.coachingRevSheet += r.coachingRevSheet;
@@ -7657,6 +7667,19 @@ async function renderAdsPerformance() {
         : '');
   }
 
+  // ---- Panel heading, driven entirely by B10 in the sheet ----
+  const coachOnly = adsSheetSettings.coachingOnly;
+  const scopeT = document.getElementById('adsScopeTitle');
+  const scopeN = document.getElementById('adsScopeNote');
+  if (scopeT) scopeT.textContent = coachOnly ? 'Coaching Only' : 'All Ad Revenue';
+  if (scopeN) {
+    scopeN.innerHTML = 'Meta only. ' + (coachOnly
+      ? 'Revenue is coaching. The smaller products the ads also sell are stripped out before anything is calculated, using the ' +
+        adsPct(adsSheetSettings.hiShare) + ' coaching share in <strong>B10</strong> of the Ads_Tracking tab.'
+      : 'Revenue counts everything the ads brought in, because <strong>B10</strong> of the Ads_Tracking tab is set to 1.') +
+      ' Every recurring payment stays in either way. Change B10 to switch: nothing here needs rebuilding.';
+  }
+
   // ---- Target table: the numbers, with no verdict attached ----
   document.getElementById('adsTargetIntro').innerHTML =
     'Over ' + adsRangeLabel(baseRows) + ' the ads brought in ' + adsMoney(base.revenue) +
@@ -7736,8 +7759,9 @@ async function renderAdsPerformance() {
       '</tbody></table>' +
       adsEitherOr(target, costPerSalesCall, revPerSalesCall, cac, adsSheetSettings.ltv) +
       '<div style="color:var(--text-muted); font-size:11px; margin-top:10px; line-height:1.7;">' +
-      'Revenue is everything the ads brought in, coaching plus the smaller products they also sell, and every recurring payment stays in. Coaching alone was ' + adsMoney(agg.coaching) + ' of it.<br>' +
-      'CAC and LTV are coaching clients only, since those are the clients the calls produce.<br>' +
+      (coachOnly
+        ? 'Every figure here is coaching. Every recurring payment attributed to ads stays in, which is most of the business. The ads also brought in ' + adsMoney(agg.revenueAll - agg.revenue) + ' of other revenue this window, counted nowhere on this page.<br>'
+        : 'Revenue is everything the ads brought in, and every recurring payment stays in.<br>') +
       'CAC and the call figures use the same attribution basis, so they agree with the ROAS above. ROAS counts cash collected this window from every client still paying; CAC counts only the clients newly signed.</div>';
   }
 
