@@ -1538,6 +1538,12 @@
         </div>
 
         <div class="chart-container" style="padding:18px; margin-bottom:16px;">
+          <div class="chart-title" style="margin-bottom:4px;">Coaching Only</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Everything on this page is coaching. Downsell and LTO are stripped out before anything is calculated, and every recurring payment stays in.</div>
+          <div id="adsCacTable"></div>
+        </div>
+
+        <div class="chart-container" style="padding:18px; margin-bottom:16px;">
           <div class="chart-title" style="margin-bottom:4px;">What It Takes To Hit Target</div>
           <div style="font-size:12px; color:var(--text-muted); margin-bottom:14px;" id="adsTargetIntro"></div>
           <div style="display:flex; gap:20px; align-items:center; flex-wrap:wrap; margin-bottom:16px; font-size:12px; color:var(--text-secondary);">
@@ -1550,7 +1556,8 @@
           <div id="adsTargetTable"></div>
         </div>
 
-        <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin:22px 0 10px 2px;">What the window produced</div>
+        <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin:22px 0 6px 2px;">What the window produced</div>
+        <div id="adsLegend" style="font-size:11px; color:var(--text-secondary); margin:0 0 12px 2px; line-height:1.6;"></div>
 
         <div class="scorecard-row" style="grid-template-columns:repeat(8,1fr); margin-bottom:8px;">
           <div class="scorecard"><div class="scorecard-label">Ad Spend</div><div class="scorecard-value" id="adsSpend">&mdash;</div><div class="scorecard-change neutral" id="adsSpendNote"></div></div>
@@ -1580,9 +1587,9 @@
           <div class="scorecard"><div class="scorecard-label">Revenue / HQ App</div><div class="scorecard-value" id="adsRevHq">&mdash;</div><div class="scorecard-change neutral">HQ only</div></div>
           <div class="scorecard"><div class="scorecard-label">Revenue / Sales Call</div><div class="scorecard-value" id="adsRevSc">&mdash;</div><div class="scorecard-change neutral">1C + 2C</div></div>
           <div class="scorecard"><div class="scorecard-label">Revenue / Call</div><div class="scorecard-value" id="adsRevCall">&mdash;</div><div class="scorecard-change neutral">incl. triage</div></div>
-          <div class="scorecard"><div class="scorecard-label">Revenue / Sale</div><div class="scorecard-value" id="adsRevSale">&mdash;</div><div class="scorecard-change neutral">what a client is worth</div></div>
-          <div class="scorecard"><div class="scorecard-label">Revenue / Click</div><div class="scorecard-value" id="adsRevClick">&mdash;</div><div class="scorecard-change neutral">top of funnel</div></div>
-          <div class="scorecard"><div class="scorecard-label">Cost / Click</div><div class="scorecard-value" id="adsCpClick2">&mdash;</div><div class="scorecard-change neutral"></div></div>
+          <div class="scorecard"><div class="scorecard-label">LTV</div><div class="scorecard-value" id="adsLtv">&mdash;</div><div class="scorecard-change neutral">per coaching client</div></div>
+          <div class="scorecard"><div class="scorecard-label">Coaching Clients</div><div class="scorecard-value" id="adsClients">&mdash;</div><div class="scorecard-change neutral">high ticket only</div></div>
+          <div class="scorecard"><div class="scorecard-label">CAC</div><div class="scorecard-value" id="adsCac">&mdash;</div><div class="scorecard-change neutral" id="adsCacNote"></div></div>
         </div>
 
         <div class="chart-container" style="padding:16px; margin-top:12px;">
@@ -7383,7 +7390,7 @@ function renderAaAttrTable() {
 // The job of this page is to state the numbers the ads have to hit. Judging a given ad
 // or ad set against them happens in Hyros.
 let adsMonthly = null;
-let adsSheetSettings = { targetRoas: 2 };
+let adsSheetSettings = { targetRoas: 2, ltv: 6860, hiShare: 0.948 };
 let _adsLoading = false;
 let _adsError = null;
 
@@ -7397,6 +7404,36 @@ function adsNum(v, dp) {
   return v.toLocaleString(undefined, { minimumFractionDigits: dp || 0, maximumFractionDigits: dp || 0 });
 }
 function adsX(v) { return isFinite(v) ? v.toFixed(2) + 'x' : '—'; }
+
+// Tints a scorecard by how its cost compares with the 12-month baseline for that
+// same step. Green means at or better than baseline, amber means drifting, red
+// means this step is where the money is being lost. A cost 25% above baseline is
+// the amber/red line.
+var ADS_TINT = {
+  green: { bg: 'rgba(78,201,176,0.13)',  bar: '#4ec9b0' },
+  amber: { bg: 'rgba(245,158,11,0.13)',  bar: '#f59e0b' },
+  red:   { bg: 'rgba(231,76,94,0.13)',   bar: '#e74c5e' },
+  none:  { bg: '',                       bar: '' }
+};
+
+function adsBand(actual, baseline) {
+  if (!isFinite(actual) || !isFinite(baseline) || baseline === 0) return 'none';
+  var ratio = actual / baseline;
+  if (ratio <= 1.02) return 'green';
+  if (ratio <= 1.25) return 'amber';
+  return 'red';
+}
+
+function adsTint(id, band, hint) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var card = el.closest ? el.closest('.scorecard') : null;
+  if (!card) return;
+  var t = ADS_TINT[band] || ADS_TINT.none;
+  card.style.background = t.bg || '';
+  card.style.borderLeft = t.bar ? ('3px solid ' + t.bar) : '';
+  card.title = hint || '';
+}
 function adsPct(v) { return isFinite(v) ? (v * 100).toFixed(0) + '%' : '—'; }
 function adsMonthLabel(d) { return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); }
 
@@ -7407,8 +7444,8 @@ async function loadAdsTracking(force) {
   _adsError = null;
   try {
     const [mTable, sTable] = await Promise.all([
-      fetchGviz('Ads_Tracking', 'SELECT *', '&range=A12:O200&headers=1'),
-      fetchGviz('Ads_Tracking', 'SELECT *', '&range=A7:B7&headers=0')
+      fetchGviz('Ads_Tracking', 'SELECT *', '&range=A12:Q200&headers=1'),
+      fetchGviz('Ads_Tracking', 'SELECT *', '&range=A7:B10&headers=0')
     ]);
 
     const raw = parseGvizRows(mTable);
@@ -7429,14 +7466,25 @@ async function loadAdsTracking(force) {
         hqApps: Number(r['High Quality Apps (HQ)']) || 0,
         dqApps: Number(r['DQ Apps']) || 0,
         partials: Number(r['Partial Submits']) || 0,
-        salesCalls: Number(r['Sales Calls (Ads)']) || 0
+        salesCalls: Number(r['Sales Calls (Ads)']) || 0,
+        coachingClients: Number(r['Coaching Clients (Ads)']) || 0,
+        coachingRevSheet: Number(r['Coaching Revenue (Ads, sheet)']) || 0
       }))
       .sort((a, b) => a.start - b.start);
 
-    if (sTable && sTable.rows && sTable.rows[0] && sTable.rows[0].c[1]) {
-      const t = sTable.rows[0].c[1].v;
+    let _share = adsSheetSettings.hiShare;
+    if (sTable && sTable.rows) {
+      const t = sTable.rows[0] && sTable.rows[0].c[1] ? sTable.rows[0].c[1].v : null;
       if (typeof t === 'number' && t > 0) adsSheetSettings.targetRoas = t;
+      const l = sTable.rows[2] && sTable.rows[2].c[1] ? sTable.rows[2].c[1].v : null;
+      if (typeof l === 'number' && l > 0) adsSheetSettings.ltv = l;
+      const h = sTable.rows[3] && sTable.rows[3].c[1] ? sTable.rows[3].c[1].v : null;
+      if (typeof h === 'number' && h > 0 && h <= 1) adsSheetSettings.hiShare = h;
+      _share = adsSheetSettings.hiShare;
     }
+    // Strip low ticket once, here. Everything downstream is high ticket only, so the
+    // page never shows two different revenue figures for the same window.
+    adsMonthly.forEach(function (m) { m.revenueAll = m.revenue; m.revenue = m.revenue * _share; });
     console.log('[ads] Loaded ' + adsMonthly.length + ' months from Ads_Tracking, target ROAS ' + adsSheetSettings.targetRoas);
   } catch (err) {
     console.error('[ads] Failed to load Ads_Tracking:', err);
@@ -7470,14 +7518,24 @@ function adsRowsForWindow(n) {
 }
 
 function adsAgg(rows) {
-  const t = { months: rows.length, spend: 0, spendHyros: 0, impressions: 0, clicks: 0, calls: 0, sales: 0, revenue: 0, apps: 0, qualApps: 0, hqApps: 0, dqApps: 0, partials: 0, salesCalls: 0 };
+  const t = { months: rows.length, spend: 0, spendHyros: 0, impressions: 0, clicks: 0, calls: 0, sales: 0, revenue: 0, apps: 0, qualApps: 0, hqApps: 0, dqApps: 0, partials: 0, salesCalls: 0, coachingClients: 0, coachingRevSheet: 0 };
   rows.forEach(r => {
     t.spend += r.spend; t.spendHyros += r.spendHyros; t.impressions += r.impressions;
     t.clicks += r.clicks; t.calls += r.calls; t.sales += r.sales; t.revenue += r.revenue;
     t.apps += r.apps; t.qualApps += r.qualApps; t.hqApps += r.hqApps;
     t.dqApps += r.dqApps; t.partials += r.partials; t.salesCalls += r.salesCalls;
+    t.coachingClients += r.coachingClients; t.coachingRevSheet += r.coachingRevSheet;
   });
   return t;
+}
+
+// How much wider Hyros attribution is than the workbook's Channel = Ads tag,
+// measured over the 12-month baseline so a short window cannot make it swing.
+// Used to put the client count on the same footing as the revenue.
+function adsUplift() {
+  var base = adsAgg(adsRowsForWindow(12));
+  if (!base.coachingRevSheet) return 1;
+  return base.revenue / base.coachingRevSheet;
 }
 
 function adsRangeLabel(rows) {
@@ -7500,7 +7558,16 @@ function adsCeilings(targetRoas) {
     perHqApp: base.hqApps ? ceilSpend / base.hqApps : NaN,
     perSalesCall: base.salesCalls ? ceilSpend / base.salesCalls : NaN,
     perSale: base.sales ? ceilSpend / base.sales : NaN,
-    perClick: base.clicks ? ceilSpend / base.clicks : NaN
+    perClick: base.clicks ? ceilSpend / base.clicks : NaN,
+    // --- LTV basis: what a coaching client is worth over their life, against
+    // what one currently costs to acquire. This is the number that governs how
+    // much a call can be worth, because a client keeps paying after the first sale.
+    ltv: adsSheetSettings.ltv,
+    clients: base.coachingClients,
+    cac: base.coachingClients ? base.spend / base.coachingClients : NaN,
+    targetCac: adsSheetSettings.ltv / targetRoas,
+    callsPerClient: base.coachingClients ? base.calls / base.coachingClients : NaN,
+    salesCallsPerClient: base.coachingClients ? base.salesCalls / base.coachingClients : NaN
   };
 }
 
@@ -7574,6 +7641,58 @@ async function renderAdsPerformance() {
     '<div style="color:var(--text-muted); font-size:11px; margin-top:10px;">"What it is worth" is ' + adsMoney(base.revenue) + ' of revenue divided by how many of that step the twelve months produced. "What it can cost" is that figure divided by the target ROAS.</div>';
   document.getElementById('adsTargetTable').innerHTML = th;
 
+  // ---- High ticket only. Every ad-attributed payment in the window counts,
+  // including every payment-plan installment. The single filter is low ticket out.
+  const cacEl = document.getElementById('adsCacTable');
+  if (cacEl) {
+    const hiRev = agg.revenue;
+    const revPerSalesCall = agg.salesCalls ? hiRev / agg.salesCalls : NaN;
+    const costPerSalesCall = agg.salesCalls ? agg.spend / agg.salesCalls : NaN;
+    const needPerSalesCall = costPerSalesCall * target;
+    const maxCostPerSalesCall = revPerSalesCall / target;
+    const revPerCall = agg.calls ? hiRev / agg.calls : NaN;
+    const costPerCall = agg.calls ? agg.spend / agg.calls : NaN;
+    const maxCostPerCall = revPerCall / target;
+    const roas = agg.spend ? hiRev / agg.spend : NaN;
+    // The revenue above is Hyros attribution, which is broader than the workbook's
+    // Channel = Ads tag. Scale the client count by the same factor so CAC's numerator
+    // and denominator describe the same population. Mixing them understated clients
+    // and roughly doubled CAC.
+    const uplift = adsUplift();
+    const clients = agg.coachingClients * uplift;
+    const cac = clients > 0 ? agg.spend / clients : NaN;
+    const targetCac = adsSheetSettings.ltv / target;
+    const row = (label, val, note, strong) =>
+      '<tr><td>' + label + '</td>' +
+      '<td style="text-align:right;' + (strong ? ' font-weight:700; color:var(--accent-teal); font-size:15px;' : '') + '">' + val + '</td>' +
+      '<td style="color:var(--text-muted);">' + note + '</td></tr>';
+    cacEl.innerHTML =
+      '<table class="data-table"><thead><tr><th>&nbsp;</th><th style="text-align:right;">Value</th><th>&nbsp;</th></tr></thead><tbody>' +
+      row('Ad spend', adsMoney(agg.spend), adsRangeLabel(rows)) +
+      row('What the ads made', adsMoney(hiRev), 'Coaching only. Every ad-attributed payment in the window, payment plan installments included.') +
+      row('ROAS', adsX(roas), 'Target is ' + adsX(target) + '.') +
+      row('Sales calls', adsNum(agg.salesCalls), '1C and 2C from ads. Triage excluded.') +
+      row('Made per sales call', adsMoney(revPerSalesCall), 'What a sales call is currently worth.', true) +
+      row('Cost per sales call', adsMoney(costPerSalesCall), 'What a sales call currently costs.', true) +
+      row('Need to make per sales call', adsMoney(needPerSalesCall), 'At what a call costs today, this is what it has to return to hit target.') +
+      row('Or, cost per sales call has to be', adsMoney(maxCostPerSalesCall), 'At what a call makes today, this is the most it can cost.', true) +
+      '<tr><td colspan="3" style="padding-top:14px; color:var(--text-muted); font-size:11px;">Same thing against Hyros calls, which include triage:</td></tr>' +
+      row('Calls (Hyros)', adsNum(agg.calls), 'Every call Hyros traces to an ad click.') +
+      row('Made per call', adsMoney(revPerCall), '') +
+      row('Cost per call', adsMoney(costPerCall), '') +
+      row('Cost per call has to be', adsMoney(maxCostPerCall), 'To hit ' + adsX(target) + '.', true) +
+      '<tr><td colspan="3" style="padding-top:14px; color:var(--text-muted); font-size:11px;">Per customer:</td></tr>' +
+      row('Coaching clients acquired', adsNum(clients, 1), 'New high ticket clients from ads. The workbook tags ' + adsNum(agg.coachingClients) + ' outright; scaled to Hyros attribution, which credits ads for ' + adsX(uplift) + ' the revenue the tag alone sees.') +
+      row('Customer acquisition cost (CAC)', adsMoney(cac), 'Ad spend divided by coaching clients acquired.', true) +
+      row('Lifetime value (LTV)', adsMoney(adsSheetSettings.ltv), 'What a coaching client pays over their life, payment plan included. About ' + adsMoney(3565) + ' of it arrives on the first payment.') +
+      row('Target CAC', adsMoney(targetCac), 'LTV divided by ' + adsX(target) + '. To hit target you need a client for this much.', true) +
+      '</tbody></table>' +
+      adsEitherOr(target, costPerSalesCall, revPerSalesCall, cac, adsSheetSettings.ltv) +
+      '<div style="color:var(--text-muted); font-size:11px; margin-top:10px; line-height:1.7;">' +
+      'Every figure on this page is coaching only. Downsell and LTO are stripped out before anything is calculated. Every recurring payment attributed to ads stays in, which is most of the business.<br>' +
+      'CAC and the call figures use the same attribution basis, so they agree with the ROAS above. ROAS counts cash collected this window from every client still paying; CAC counts only the clients newly signed.</div>';
+  }
+
   const scNote = document.getElementById('adsScenarioNote');
   if (scNote) {
     const changed = Math.abs(target - adsSheetSettings.targetRoas) > 0.001;
@@ -7610,6 +7729,52 @@ async function renderAdsPerformance() {
   set('adsSales', adsNum(agg.sales));
   set('adsSalesNote', agg.sales ? adsMoney(agg.revenue / agg.sales) + ' per sale' : '');
   set('adsCps', adsMoney(agg.sales ? agg.spend / agg.sales : NaN));
+  const _clients = agg.coachingClients * adsUplift();
+  set('adsClients', adsNum(_clients, 1));
+  set('adsCac', adsMoney(_clients > 0 ? agg.spend / _clients : NaN));
+  set('adsCacNote', 'target ' + adsMoney(adsSheetSettings.ltv / adsTargetRoas()));
+  set('adsLtv', adsMoney(adsSheetSettings.ltv));
+
+  // ---- Bottleneck highlighting: this window's cost per step against the
+  // 12-month baseline cost for the same step. On the 12-month view the two are
+  // the same thing by definition, so nothing is tinted.
+  const isBaseline = (n === 12);
+  const baseCost = {
+    app: base.apps ? base.spend / base.apps : NaN,
+    qual: base.qualApps ? base.spend / base.qualApps : NaN,
+    hq: base.hqApps ? base.spend / base.hqApps : NaN,
+    sc: base.salesCalls ? base.spend / base.salesCalls : NaN,
+    call: base.calls ? base.spend / base.calls : NaN,
+    sale: base.sales ? base.spend / base.sales : NaN,
+    click: base.clicks ? base.spend / base.clicks : NaN
+  };
+  const winCost = {
+    app: agg.apps ? agg.spend / agg.apps : NaN,
+    qual: agg.qualApps ? agg.spend / agg.qualApps : NaN,
+    hq: agg.hqApps ? agg.spend / agg.hqApps : NaN,
+    sc: agg.salesCalls ? agg.spend / agg.salesCalls : NaN,
+    call: agg.calls ? agg.spend / agg.calls : NaN,
+    sale: agg.sales ? agg.spend / agg.sales : NaN,
+    click: agg.clicks ? agg.spend / agg.clicks : NaN
+  };
+  [['adsCpa', 'app'], ['adsCpQual', 'qual'], ['adsCpHq', 'hq'], ['adsCpSc', 'sc'],
+   ['adsCalls', 'call'], ['adsCps', 'sale'], ['adsClicks', 'click']].forEach(p => {
+    const a = winCost[p[1]], b = baseCost[p[1]];
+    const band = isBaseline ? 'none' : adsBand(a, b);
+    const hint = (isFinite(a) && isFinite(b))
+      ? 'This window ' + adsMoney(a, a < 10 ? 2 : 0) + ' vs 12-month baseline ' + adsMoney(b, b < 10 ? 2 : 0)
+      : '';
+    adsTint(p[0], band, hint);
+  });
+  const legend = document.getElementById('adsLegend');
+  if (legend) {
+    legend.innerHTML = isBaseline
+      ? '<span style="color:var(--text-muted);">These twelve months are the baseline, so nothing is highlighted here. Switch to 3 or 6 months to see which step has moved.</span>'
+      : 'Highlighting compares each cost against the 12-month baseline for the same step. ' +
+        '<span style="color:#4ec9b0;">Green</span> is at or better than baseline. ' +
+        '<span style="color:#f59e0b;">Amber</span> is up to 25% worse. ' +
+        '<span style="color:#e74c5e;">Red</span> is more than 25% worse, which is where the funnel is choking.';
+  }
 
   const rev = v => adsMoney(v ? agg.revenue / v : NaN);
   set('adsRevApp', rev(agg.apps));
@@ -7623,6 +7788,42 @@ async function renderAdsPerformance() {
 
   renderAdsCharts(rows, ceil);
   renderAdsNotes();
+}
+
+// Spells the gap out as a choice, because there are only ever two levers:
+// pay less for the call, or get more out of it.
+function adsEitherOr(target, costCall, revCall, cac, ltv) {
+  if (!isFinite(costCall) || !isFinite(revCall) || costCall <= 0 || revCall <= 0) return '';
+  var needCost = revCall / target;           // cost the call would have to come down to
+  var needRev  = costCall * target;          // revenue the call would have to rise to
+  var costGap  = costCall - needCost;
+  var revGap   = needRev - revCall;
+  var already  = (revCall / costCall) >= target;
+  var head, body;
+  if (already) {
+    head = 'You are already past ' + adsX(target) + ' on the call maths.';
+    body = 'A sales call costs ' + adsMoney(costCall) + ' and returns ' + adsMoney(revCall) +
+           ', which is ' + adsX(revCall / costCall) + '. A call could cost up to ' +
+           '<strong style="color:var(--accent-teal);">' + adsMoney(needCost) + '</strong> and still hit target, so you have ' +
+           adsMoney(needCost - costCall) + ' of headroom per call.';
+  } else {
+    head = 'Two ways to get to ' + adsX(target) + ', and you only need one of them.';
+    body = '<strong style="color:var(--text-primary);">Either</strong> get cost per sales call down ' + adsMoney(costGap) +
+           ', from ' + adsMoney(costCall) + ' to <strong style="color:var(--accent-teal);">' + adsMoney(needCost) + '</strong>. ' +
+           '<strong style="color:var(--text-primary);">Or</strong> collect ' + adsMoney(revGap) +
+           ' more out of each one, taking it from ' + adsMoney(revCall) + ' to <strong style="color:var(--accent-teal);">' + adsMoney(needRev) + '</strong>. ' +
+           'Cheaper calls, better calls, or a bigger ticket. Any mix of the two that closes the gap works.';
+  }
+  var perClient = '';
+  if (isFinite(cac) && isFinite(ltv) && cac > 0) {
+    var needCac = ltv / target;
+    var needLtv = cac * target;
+    perClient = '<div style="margin-top:8px; color:var(--text-secondary);">Same choice per customer: acquire one for ' +
+      '<strong style="color:var(--accent-teal);">' + adsMoney(needCac) + '</strong> instead of ' + adsMoney(cac) +
+      ', or get lifetime value from ' + adsMoney(ltv) + ' up to <strong style="color:var(--accent-teal);">' + adsMoney(needLtv) + '</strong>.</div>';
+  }
+  return '<div style="margin-top:16px; padding:14px 16px; background:rgba(59,130,246,0.10); border-left:3px solid var(--accent-blue); border-radius:6px; font-size:12px; line-height:1.75; color:var(--text-secondary);">' +
+         '<div style="font-weight:700; color:var(--text-primary); margin-bottom:6px;">' + head + '</div>' + body + perClient + '</div>';
 }
 
 function renderAdsCharts(rows, ceil) {
