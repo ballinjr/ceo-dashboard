@@ -7405,10 +7405,9 @@ function adsNum(v, dp) {
 }
 function adsX(v) { return isFinite(v) ? v.toFixed(2) + 'x' : '—'; }
 
-// Tints a scorecard by how its cost compares with the 12-month baseline for that
-// same step. Green means at or better than baseline, amber means drifting, red
-// means this step is where the money is being lost. A cost 25% above baseline is
-// the amber/red line.
+// Tints a scorecard by how it stands against the target it has to hit. Green is at
+// or under target, amber is within 25% of it, red is more than 25% off. Applies on
+// every window, so the page always reads as scored rather than looking inert.
 var ADS_TINT = {
   green: { bg: 'rgba(78,201,176,0.13)',  bar: '#4ec9b0' },
   amber: { bg: 'rgba(245,158,11,0.13)',  bar: '#f59e0b' },
@@ -7421,6 +7420,14 @@ function adsBand(actual, baseline) {
   var ratio = actual / baseline;
   if (ratio <= 1.02) return 'green';
   if (ratio <= 1.25) return 'amber';
+  return 'red';
+}
+
+function adsBandUp(actual, targetVal) {
+  if (!isFinite(actual) || !isFinite(targetVal) || targetVal === 0) return 'none';
+  var ratio = actual / targetVal;
+  if (ratio >= 0.98) return 'green';
+  if (ratio >= 0.75) return 'amber';
   return 'red';
 }
 
@@ -7730,15 +7737,16 @@ async function renderAdsPerformance() {
   set('adsSalesNote', agg.sales ? adsMoney(agg.revenue / agg.sales) + ' per sale' : '');
   set('adsCps', adsMoney(agg.sales ? agg.spend / agg.sales : NaN));
   const _clients = agg.coachingClients * adsUplift();
+  const cacNow = _clients > 0 ? agg.spend / _clients : NaN;
   set('adsClients', adsNum(_clients, 1));
   set('adsCac', adsMoney(_clients > 0 ? agg.spend / _clients : NaN));
   set('adsCacNote', 'target ' + adsMoney(adsSheetSettings.ltv / adsTargetRoas()));
   set('adsLtv', adsMoney(adsSheetSettings.ltv));
 
-  // ---- Bottleneck highlighting: this window's cost per step against the
-  // 12-month baseline cost for the same step. On the 12-month view the two are
-  // the same thing by definition, so nothing is tinted.
-  const isBaseline = (n === 12);
+  // ---- Highlighting. Every cost card is scored against the target it has to hit,
+  // so the colour means the same thing on every window: green is at or under target,
+  // amber is close, red is a long way off. The tooltip also carries the 12-month
+  // baseline so you can see whether a step has moved as well as where it stands.
   const baseCost = {
     app: base.apps ? base.spend / base.apps : NaN,
     qual: base.qualApps ? base.spend / base.qualApps : NaN,
@@ -7757,23 +7765,33 @@ async function renderAdsPerformance() {
     sale: agg.sales ? agg.spend / agg.sales : NaN,
     click: agg.clicks ? agg.spend / agg.clicks : NaN
   };
-  [['adsCpa', 'app'], ['adsCpQual', 'qual'], ['adsCpHq', 'hq'], ['adsCpSc', 'sc'],
-   ['adsCalls', 'call'], ['adsCps', 'sale'], ['adsClicks', 'click']].forEach(p => {
-    const a = winCost[p[1]], b = baseCost[p[1]];
-    const band = isBaseline ? 'none' : adsBand(a, b);
-    const hint = (isFinite(a) && isFinite(b))
-      ? 'This window ' + adsMoney(a, a < 10 ? 2 : 0) + ' vs 12-month baseline ' + adsMoney(b, b < 10 ? 2 : 0)
+  const ceilOf = { app: ceil.perApp, qual: ceil.perQualApp, hq: ceil.perHqApp,
+                   sc: ceil.perSalesCall, call: ceil.perCall, sale: ceil.perSale, click: ceil.perClick };
+  [['adsCpa','app','application'], ['adsCpQual','qual','qualified application'], ['adsCpHq','hq','high quality application'],
+   ['adsCpSc','sc','sales call'], ['adsCalls','call','call'], ['adsCps','sale','sale'], ['adsClicks','click','click']]
+  .forEach(p => {
+    const a = winCost[p[1]], c = ceilOf[p[1]], b = baseCost[p[1]];
+    const dp = v => (v < 10 ? 2 : 0);
+    const hint = (isFinite(a) && isFinite(c))
+      ? 'Cost per ' + p[2] + ' is ' + adsMoney(a, dp(a)) + '. Target is ' + adsMoney(c, dp(c)) +
+        '. 12-month baseline is ' + adsMoney(b, dp(b)) + '.'
       : '';
-    adsTint(p[0], band, hint);
+    adsTint(p[0], adsBand(a, c), hint);
   });
+  // CAC against target CAC, and ROAS against the target ROAS (higher is better there).
+  adsTint('adsCac', adsBand(cacNow, ceil.targetCac),
+    isFinite(cacNow) ? 'A coaching client costs ' + adsMoney(cacNow) + '. Target is ' + adsMoney(ceil.targetCac) + '.' : '');
+  const roasNow = agg.spend ? agg.revenue / agg.spend : NaN;
+  adsTint('adsRoas', adsBandUp(roasNow, target),
+    isFinite(roasNow) ? 'ROAS is ' + adsX(roasNow) + ' against a target of ' + adsX(target) + '.' : '');
+
   const legend = document.getElementById('adsLegend');
   if (legend) {
-    legend.innerHTML = isBaseline
-      ? '<span style="color:var(--text-muted);">These twelve months are the baseline, so nothing is highlighted here. Switch to 3 or 6 months to see which step has moved.</span>'
-      : 'Highlighting compares each cost against the 12-month baseline for the same step. ' +
-        '<span style="color:#4ec9b0;">Green</span> is at or better than baseline. ' +
-        '<span style="color:#f59e0b;">Amber</span> is up to 25% worse. ' +
-        '<span style="color:#e74c5e;">Red</span> is more than 25% worse, which is where the funnel is choking.';
+    legend.innerHTML = 'Each cost is scored against the target it has to hit. ' +
+      '<span style="color:#4ec9b0; font-weight:600;">Green</span> is at or under target. ' +
+      '<span style="color:#f59e0b; font-weight:600;">Amber</span> is within 25% of it. ' +
+      '<span style="color:#e74c5e; font-weight:600;">Red</span> is more than 25% over, which is where the funnel is choking. ' +
+      'Hover any card for its target and its 12-month baseline.';
   }
 
   const rev = v => adsMoney(v ? agg.revenue / v : NaN);
