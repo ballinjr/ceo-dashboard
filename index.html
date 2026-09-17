@@ -7393,6 +7393,7 @@ let adsMonthly = null;
 let adsSheetSettings = { targetRoas: 2, ltv: 6860, hiShare: 0.948 };
 let _adsLoading = false;
 let _adsError = null;
+let adsSpendFallback = [];   // months where column D was empty and C was used instead
 
 function adsMoney(v, dp) {
   if (v === null || v === undefined || !isFinite(v)) return '—';
@@ -7455,28 +7456,61 @@ async function loadAdsTracking(force) {
       fetchGviz('Ads_Tracking', 'SELECT *', '&range=A7:B10&headers=0')
     ]);
 
-    const raw = parseGvizRows(mTable);
-    adsMonthly = raw
-      .filter(r => r['Month Start'] instanceof Date)
-      .map(r => ({
-        label: (r['Month'] || '').toString(),
-        start: r['Month Start'],
-        spendHyros: Number(r['Spend (Hyros)']) || 0,
-        spend: Number(r['Spend (Actual) - EDIT']) || 0,
-        impressions: Number(r['Impressions']) || 0,
-        clicks: Number(r['Clicks']) || 0,
-        calls: Number(r['Calls (Hyros)']) || 0,
-        sales: Number(r['Sales (Hyros)']) || 0,
-        revenue: Number(r['Revenue (Hyros)']) || 0,
-        apps: Number(r['Applications (All)']) || 0,
-        qualApps: Number(r['Qualified Apps (HQ+LQ)']) || 0,
-        hqApps: Number(r['High Quality Apps (HQ)']) || 0,
-        dqApps: Number(r['DQ Apps']) || 0,
-        partials: Number(r['Partial Submits']) || 0,
-        salesCalls: Number(r['Sales Calls (Ads)']) || 0,
-        coachingClients: Number(r['Coaching Clients (Ads)']) || 0,
-        coachingRevSheet: Number(r['Coaching Revenue (Ads, sheet)']) || 0
-      }))
+    // Read the monthly block by COLUMN POSITION, never by header text.
+    // Header text is editable and someone editing column D once overwrote D12
+    // with "Spend (Hyros)". The old label lookup then found nothing, spend fell
+    // to 0, and every cost-per figure on the page read $0. Positions A..Q are
+    // fixed by the range, so renaming a header can no longer break anything.
+    const rows = (mTable && mTable.rows) ? mTable.rows : [];
+    const cellAt = (i, k) => {
+      const row = rows[i];
+      if (!row || !row.c || !row.c[k]) return null;
+      const v = row.c[k].v;
+      return (v === undefined) ? null : v;
+    };
+    const numAt = (i, k) => { const n = Number(cellAt(i, k)); return isFinite(n) ? n : 0; };
+    const dateAt = (i, k) => {
+      const v = cellAt(i, k);
+      if (v instanceof Date) return v;
+      if (typeof v === 'string') {
+        const m = v.match(/^Date\((\d+),(\d+),(\d+)/);
+        if (m) return new Date(Number(m[1]), Number(m[2]), Number(m[3]));
+      }
+      return null;
+    };
+
+    adsSpendFallback = [];
+    adsMonthly = rows
+      .map((_, i) => i)
+      .filter(i => dateAt(i, 1) instanceof Date)
+      .map(i => {
+        const start = dateAt(i, 1);
+        const spendHyros = numAt(i, 2);   // column C, what Hyros reports
+        const spendActual = numAt(i, 3);  // column D, the figure Miguel types in
+        const label = (cellAt(i, 0) || adsMonthLabel(start)).toString();
+        // D is the number that counts. Fall back to C only when D is empty or
+        // unreadable, and remember which months that happened to.
+        if (!(spendActual > 0) && spendHyros > 0) adsSpendFallback.push(label);
+        return {
+          label: label,
+          start: start,
+          spendHyros: spendHyros,
+          spend: spendActual > 0 ? spendActual : spendHyros,
+          impressions: numAt(i, 4),
+          clicks: numAt(i, 5),
+          calls: numAt(i, 6),
+          sales: numAt(i, 7),
+          revenue: numAt(i, 8),
+          apps: numAt(i, 9),
+          qualApps: numAt(i, 10),
+          hqApps: numAt(i, 11),
+          dqApps: numAt(i, 12),
+          partials: numAt(i, 13),
+          salesCalls: numAt(i, 14),
+          coachingClients: numAt(i, 15),
+          coachingRevSheet: numAt(i, 16)
+        };
+      })
       .sort((a, b) => a.start - b.start);
 
     let _share = adsSheetSettings.hiShare;
@@ -7614,7 +7648,11 @@ async function renderAdsPerformance() {
       'Spend for the scorecard window: <strong>' + adsMoney(agg.spend) + '</strong>' +
       (spendEdited
         ? ' (entered by hand; Hyros recorded ' + adsMoney(agg.spendHyros) + ' on conversion campaigns).'
-        : ' (straight from Hyros, which only sees conversion-based campaigns. If you ran anything else, put the real number in column D of the <strong>Ads_Tracking</strong> tab and every figure here moves with it).');
+        : ' (straight from Hyros, which only sees conversion-based campaigns. If you ran anything else, put the real number in column D of the <strong>Ads_Tracking</strong> tab and every figure here moves with it).') +
+      (adsSpendFallback.length
+        ? '<br><span style="color:var(--accent-amber,#f0ad4e);">Column D is empty for ' + adsSpendFallback.join(', ') +
+          ', so those months are using the Hyros figure. Fill column D to correct them.</span>'
+        : '');
   }
 
   // ---- Target table: the numbers, with no verdict attached ----
