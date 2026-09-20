@@ -154,6 +154,29 @@
 
   .date-picker button:hover { opacity: 0.9; }
 
+  /* refresh-btn */
+  .topbar-actions { display:flex; align-items:center; gap:16px; }
+  .refresh-box { display:flex; align-items:center; gap:10px; }
+  .refresh-stamp { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+  .refresh-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: all 0.15s;
+  }
+  .refresh-btn:hover { color: var(--text-primary); border-color: var(--accent-teal); }
+  .refresh-btn:disabled { cursor: default; opacity: 0.7; }
+  .refresh-btn .refresh-icon { display:inline-block; font-size: 14px; line-height: 1; }
+  .refresh-btn.is-busy .refresh-icon { animation: spin 0.9s linear infinite; }
+
   .compare-bar {
     display: flex;
     align-items: center;
@@ -562,11 +585,19 @@
       <span class="logo">M</span>
       <span id="pageTitle">MTD Company Overview</span>
     </h1>
-    <div class="date-picker">
-      <input type="date" id="startDate">
-      <span style="color: var(--text-muted)">—</span>
-      <input type="date" id="endDate">
-      <button onclick="applyDateFilter()">Apply</button>
+    <div class="topbar-actions">
+      <div class="date-picker">
+        <input type="date" id="startDate">
+        <span style="color: var(--text-muted)">—</span>
+        <input type="date" id="endDate">
+        <button onclick="applyDateFilter()">Apply</button>
+      </div>
+      <div class="refresh-box">
+        <span class="refresh-stamp" id="refreshStamp"></span>
+        <button class="refresh-btn" id="refreshBtn" onclick="refreshDashboard()" title="Pull the latest rows from the Google Sheet">
+          <span class="refresh-icon">↻</span><span id="refreshLabel">Refresh</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1656,6 +1687,24 @@
             <div style="position:relative; height:200px;"><canvas id="aoResultsChart"></canvas></div>
           </div>
         </div>
+
+        <!-- BEGIN app-quality-12m -->
+        <div class="chart-container" style="padding:16px; margin-bottom:12px;">
+          <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+            <div class="chart-title" style="margin:0;">Application Quality by Month</div>
+            <div style="color:var(--text-muted); font-size:11px;">Click any column heading to sort. Click it again to flip the direction.</div>
+          </div>
+          <div style="color:var(--text-secondary); font-size:12px; margin:8px 0 12px 0;">
+            Every application by the month it came in, split by Result Tag. Always the current month plus the twelve before it, so the same month last year is always on screen to compare against. It ignores the date range at the top of the screen. The Channel, Platform, Funnel and Location filters above do apply.
+            <span id="aoQualityScope" style="color:var(--text-muted);"></span>
+          </div>
+          <div id="aoQualitySummary"></div>
+          <div id="aoQualityTable"></div>
+          <div style="color:var(--text-muted); font-size:11px; margin-top:12px; line-height:1.6;">
+            Apps counts every row in App_Log for that month. HQ is Result Tag "HQ Book A Call", LQ is "LQ Book A Call", DQ is "DQ", Partial is someone who started an application and never finished it, Untagged is a row nobody has tagged yet. HQ %, Qual % and DQ % are all measured against Apps, so Qual % is HQ plus LQ over every application that came in. Best and weakest are ranked on Qual %. The current month is still filling, is marked MTD, and stays out of that ranking.
+          </div>
+        </div>
+        <!-- END app-quality-12m -->
 
         <!-- Lead Quality Insights — auto-analyzed from last 12 months -->
         <div class="chart-container" style="padding:16px; margin-bottom:12px;">
@@ -2768,11 +2817,67 @@ function clearAllDeltas() {
 // ====================
 let _gvizCallbackId = 0;
 
+// Global refresh. loadAllData() already re-pulls every tab, re-parses and
+// re-renders, so this wraps it with a button state and keeps the page visible
+// instead of dropping back to the full-screen loader.
+var _dashRefreshing = false;
+
+async function refreshDashboard() {
+  if (_dashRefreshing) return;
+  var btn = document.getElementById('refreshBtn');
+  var label = document.getElementById('refreshLabel');
+  var stamp = document.getElementById('refreshStamp');
+  var loader = document.getElementById('loadingIndicator');
+  var firstLoad = !appData || appData.length === 0;
+
+  _dashRefreshing = true;
+  if (btn) { btn.disabled = true; btn.classList.add('is-busy'); }
+  if (label) label.textContent = 'Refreshing';
+  if (stamp) stamp.textContent = 'checking the sheet';
+
+  try {
+    var pending = loadAllData();
+    // loadAllData shows the full-screen loader synchronously before its first
+    // await. On a refresh the page is already on screen, so put it straight
+    // back down and let the button carry the state instead.
+    if (loader && !firstLoad) loader.style.display = 'none';
+
+    // Ads_Tracking is loaded separately and cached for the whole session, so
+    // loadAllData never touches it. Force it here, otherwise Ad Performance
+    // would keep showing whatever it read the first time the page was opened.
+    var adsPending = loadAdsTracking(true);
+
+    await Promise.all([pending, adsPending]);
+
+    // That ads pull finishes independently of loadAllData's render pass, so if
+    // Ad Performance is the page on screen, draw it again on the fresh rows.
+    if (typeof _currentPage !== 'undefined' && _currentPage === 'ads-perf') {
+      await renderAdsPerformance();
+    }
+
+    var failed = loader && loader.innerHTML.indexOf('Unable to load') !== -1;
+    if (failed) {
+      if (loader) loader.style.display = 'flex';
+      if (stamp) stamp.textContent = 'refresh failed';
+    } else if (stamp) {
+      var adsNote = _adsError ? ', ads tab failed' : '';
+      stamp.textContent = 'updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + adsNote;
+    }
+  } catch (e) {
+    console.error('[dashboard] refresh failed:', e);
+    if (stamp) stamp.textContent = 'refresh failed';
+  } finally {
+    _dashRefreshing = false;
+    if (btn) { btn.disabled = false; btn.classList.remove('is-busy'); }
+    if (label) label.textContent = 'Refresh';
+  }
+}
+
 function fetchGviz(sheetName, query, extraParams) {
   return new Promise((resolve, reject) => {
     const cbName = '_gvizCb' + (++_gvizCallbackId);
     const encoded = encodeURIComponent(query);
-    const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tq=${encoded}&sheet=${encodeURIComponent(sheetName)}&tqx=responseHandler:${cbName}` + (extraParams || '');
+    const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tq=${encoded}&sheet=${encodeURIComponent(sheetName)}&tqx=responseHandler:${cbName}&_cb=${Date.now()}_${_gvizCallbackId}` + (extraParams || '');
     console.log(`[gviz] Fetching ${sheetName} via JSONP: ${url.substring(0, 150)}...`);
 
     const timeout = setTimeout(() => {
@@ -2861,6 +2966,16 @@ async function loadAllData() {
     ]);
 
     appData = parseGvizRows(appTable);
+    // App_Log carries one "Day Counter" spacer row per calendar day, with a date
+    // and nothing else. Those are not applications, so they come out here, once,
+    // before anything counts them. Roughly 30 a month were landing in Total
+    // Applications and, having no Result Tag, in DQ Leads.
+    appData = appData.filter(function (r) {
+      var nm = (r['Name'] || '').toString().trim().toLowerCase();
+      if (nm === 'day counter') return false;
+      var em = (r['Email'] || '').toString().trim();
+      return !!(em || nm);
+    });
     callData = parseGvizRows(callTable);
     salesData = parseGvizRows(salesTable);
     neutralizePairedLostDisputes(salesData);
@@ -2872,6 +2987,8 @@ async function loadAllData() {
     if (salesData.length > 0) console.log('[dashboard] Sample sales row:', JSON.stringify(salesData[0]));
 
     computeAndRender();
+    var _rs = document.getElementById('refreshStamp');
+    if (_rs) _rs.textContent = 'updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     document.getElementById('lastUpdated').textContent = `Data loaded: ${new Date().toLocaleString()} | ${appData.length} apps, ${callData.length} calls, ${salesData.length} sales`;
 
   } catch (err) {
@@ -6555,6 +6672,7 @@ function renderApplicationOverview() {
 
   // --- Buyer Profile Insights (always uses last 12 months, ignores date picker) ---
   renderBuyerInsights(salesByEmail);
+  renderAoQuality();
 
   // Build result tag revenue table
   const resultBuckets = { 'HQ': { apps: 0, unique: 0, sold: 0, rev: 0 }, 'LQ': { apps: 0, unique: 0, sold: 0, rev: 0 }, 'DQ': { apps: 0, unique: 0, sold: 0, rev: 0 } };
@@ -6840,6 +6958,239 @@ function renderAoAllQuestions(apps, salesByEmail) {
     });
   });
 }
+
+// BEGIN app-quality-12m
+// Application Quality by month.
+// Reads App_Log directly, one row per calendar month: the current month plus the
+// twelve before it, so the same month a year ago is always visible. Deliberately
+// ignores the global date picker. The page's Channel / Platform / Funnel /
+// Location selects do apply.
+var AO_Q_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var AO_Q_SORT = { col: 'month', dir: 'asc' };
+
+function aoQualityFiltered() {
+  if (!appData) return [];
+  function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+  var ch = val('aoChannelFilter'), pl = val('aoPlatformFilter');
+  var fn = val('aoFunnelFilter'), lo = val('aoLocationFilter');
+  if (!ch && !pl && !fn && !lo) return appData;
+  return appData.filter(function (r) {
+    if (ch && (r['Channel'] || '') !== ch) return false;
+    if (pl && (r['Platform'] || '') !== pl) return false;
+    if (fn && (r['Funnel'] || '') !== fn) return false;
+    if (lo && (r['Location'] || '') !== lo) return false;
+    return true;
+  });
+}
+
+function aoQualityBuckets() {
+  var now = new Date();
+  var months = [], index = {};
+  for (var i = 12; i >= 0; i--) {
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      y: d.getFullYear(), m: d.getMonth(), seq: 12 - i,
+      label: AO_Q_MONTHS[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2),
+      current: (i === 0), yearAgo: (i === 12),
+      apps: 0, hq: 0, lq: 0, dq: 0, partial: 0, untagged: 0
+    });
+    index[d.getFullYear() + '-' + d.getMonth()] = months.length - 1;
+  }
+  aoQualityFiltered().forEach(function (r) {
+    var d = getDateField(r, ['Date Submitted']);
+    if (!d) return;
+    var i = index[d.getFullYear() + '-' + d.getMonth()];
+    if (i === undefined) return;
+    var mo = months[i];
+    mo.apps++;
+    var t = (r['Result Tag'] || '').toString().trim().toUpperCase();
+    if (t === '') mo.untagged++;
+    else if (t.indexOf('HQ') === 0) mo.hq++;
+    else if (t.indexOf('LQ') === 0) mo.lq++;
+    else if (t.indexOf('PARTIAL') === 0) mo.partial++;
+    else if (t.indexOf('DQ') === 0) mo.dq++;
+    else mo.untagged++;
+  });
+  months.forEach(function (mo) {
+    mo.qual = mo.apps > 0 ? (mo.hq + mo.lq) / mo.apps * 100 : null;
+    mo.hqRate = mo.apps > 0 ? mo.hq / mo.apps * 100 : null;
+    mo.dqRate = mo.apps > 0 ? mo.dq / mo.apps * 100 : null;
+  });
+  return months;
+}
+
+// Click a heading to sort by it. Month starts oldest first, every other column
+// starts highest first, since that is the question being asked of it.
+function aoQualitySort(col) {
+  if (AO_Q_SORT.col === col) {
+    AO_Q_SORT.dir = (AO_Q_SORT.dir === 'asc') ? 'desc' : 'asc';
+  } else {
+    AO_Q_SORT.col = col;
+    AO_Q_SORT.dir = (col === 'month') ? 'asc' : 'desc';
+  }
+  renderAoQuality();
+}
+
+function renderAoQuality() {
+  var host = document.getElementById('aoQualityTable');
+  if (!host) return;
+  var months = aoQualityBuckets();
+
+  var scopeBits = [];
+  ['aoChannelFilter', 'aoPlatformFilter', 'aoFunnelFilter', 'aoLocationFilter'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && el.value) scopeBits.push(el.value);
+  });
+  var scopeEl = document.getElementById('aoQualityScope');
+  if (scopeEl) scopeEl.textContent = scopeBits.length ? ' Filtered to: ' + scopeBits.join(' / ') + '.' : '';
+
+  // Best and weakest are judged on complete months only.
+  var best = null, worst = null, hi = null, lo = null;
+  months.forEach(function (mo) {
+    if (mo.current || mo.qual === null) return;
+    if (!best || mo.qual > best.qual) best = mo;
+    if (!worst || mo.qual < worst.qual) worst = mo;
+    if (hi === null || mo.qual > hi) hi = mo.qual;
+    if (lo === null || mo.qual < lo) lo = mo.qual;
+  });
+
+  function qualWash(mo) {
+    if (mo.qual === null || hi === null || hi === lo) return '';
+    var t = Math.max(0, Math.min(1, (mo.qual - lo) / (hi - lo)));
+    return 'background:rgba(78,201,176,' + (0.04 + t * 0.26).toFixed(3) + ');';
+  }
+
+  var pct1 = function (v) { return v === null ? '\u2014' : v.toFixed(1) + '%'; };
+  var divider = 'border-left:1px solid var(--border-color);';
+
+  // ---- headline tiles ---------------------------------------------------
+  var sum = document.getElementById('aoQualitySummary');
+  if (sum) {
+    var complete = months.filter(function (mo) { return !mo.current; });
+    var last3 = complete.slice(-3), l3apps = 0, l3qual = 0;
+    last3.forEach(function (mo) { l3apps += mo.apps; l3qual += mo.hq + mo.lq; });
+    var l3 = l3apps > 0 ? l3qual / l3apps * 100 : null;
+    var tApps = 0, tQual = 0;
+    months.forEach(function (mo) { tApps += mo.apps; tQual += mo.hq + mo.lq; });
+    var tAll = tApps > 0 ? tQual / tApps * 100 : null;
+
+    var cur = months[months.length - 1], ago = months[0];
+
+    function tile(label, value, sub, colour) {
+      return '<div style="flex:1; min-width:150px; background:var(--bg-dark); border:1px solid var(--border-color);' +
+        ' border-left:3px solid ' + colour + '; border-radius:6px; padding:10px 12px;">' +
+        '<div style="color:var(--text-muted); font-size:11px; text-transform:uppercase; letter-spacing:0.04em;">' + label + '</div>' +
+        '<div style="color:var(--text-primary); font-size:18px; font-weight:600; margin-top:3px;">' + value + '</div>' +
+        '<div style="color:var(--text-secondary); font-size:11px; margin-top:2px;">' + sub + '</div>' +
+        '</div>';
+    }
+
+    var trendColour = (l3 !== null && tAll !== null && l3 >= tAll) ? 'var(--accent-green)' : 'var(--accent-red)';
+    var yoyColour = (cur.qual !== null && ago.qual !== null && cur.qual >= ago.qual) ? 'var(--accent-green)' : 'var(--accent-red)';
+    var yoyValue = pct1(cur.qual) + ' vs ' + pct1(ago.qual);
+
+    sum.innerHTML = '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">' +
+      (best ? tile('Best month', best.label + ' at ' + pct1(best.qual),
+                   best.hq + ' HQ and ' + best.lq + ' LQ out of ' + best.apps.toLocaleString() + ' apps', 'var(--accent-green)') : '') +
+      (worst ? tile('Weakest month', worst.label + ' at ' + pct1(worst.qual),
+                    worst.hq + ' HQ and ' + worst.lq + ' LQ out of ' + worst.apps.toLocaleString() + ' apps', 'var(--accent-red)') : '') +
+      tile('Last 3 complete months', pct1(l3), 'qualified, against ' + pct1(tAll) + ' across the window', trendColour) +
+      tile(cur.label + ' vs ' + ago.label, yoyValue,
+           'qualified, same month a year ago' + (cur.current ? ' (this month still filling)' : ''), yoyColour) +
+      '</div>';
+  }
+
+  // ---- sort -------------------------------------------------------------
+  var keyOf = {
+    month: function (mo) { return mo.seq; },
+    apps: function (mo) { return mo.apps; },
+    hq: function (mo) { return mo.hq; },
+    lq: function (mo) { return mo.lq; },
+    dq: function (mo) { return mo.dq; },
+    partial: function (mo) { return mo.partial; },
+    untagged: function (mo) { return mo.untagged; },
+    hqRate: function (mo) { return mo.hqRate; },
+    qual: function (mo) { return mo.qual; },
+    dqRate: function (mo) { return mo.dqRate; }
+  };
+  var getKey = keyOf[AO_Q_SORT.col] || keyOf.month;
+  var dir = (AO_Q_SORT.dir === 'asc') ? 1 : -1;
+  var rows = months.slice().sort(function (a, b) {
+    var ka = getKey(a), kb = getKey(b);
+    if (ka === null && kb === null) return a.seq - b.seq;
+    if (ka === null) return 1;          // empty months sink either way
+    if (kb === null) return -1;
+    if (ka === kb) return a.seq - b.seq;
+    return (ka - kb) * dir;
+  });
+
+  // ---- table ------------------------------------------------------------
+  function th(col, text, extra) {
+    var active = (AO_Q_SORT.col === col);
+    var arrow = active ? ' <span class="sort-arrow">' + (AO_Q_SORT.dir === 'asc' ? '\u25b2' : '\u25bc') + '</span>' : '';
+    return '<th onclick="aoQualitySort(\'' + col + '\')" style="cursor:pointer; user-select:none; ' +
+      (extra || '') + (active ? ' color:var(--text-primary);' : '') + '">' + text + arrow + '</th>';
+  }
+
+  var html = '<table class="attr-breakdown-table"><thead><tr>' +
+    th('month', 'Month', 'width:150px;') +
+    th('apps', 'Apps', 'text-align:right;') +
+    th('hq', 'HQ', 'text-align:right; ' + divider) +
+    th('lq', 'LQ', 'text-align:right;') +
+    th('dq', 'DQ', 'text-align:right;') +
+    th('partial', 'Partial', 'text-align:right;') +
+    th('untagged', 'Untagged', 'text-align:right;') +
+    th('hqRate', 'HQ %', 'text-align:right; ' + divider) +
+    th('qual', 'Qual %', 'text-align:right;') +
+    th('dqRate', 'DQ %', 'text-align:right;') +
+    '</tr></thead><tbody>';
+
+  var tot = { apps: 0, hq: 0, lq: 0, dq: 0, partial: 0, untagged: 0 };
+  rows.forEach(function (mo) {
+    ['apps', 'hq', 'lq', 'dq', 'partial', 'untagged'].forEach(function (k) { tot[k] += mo[k]; });
+
+    var pill = '';
+    if (best && mo === best) pill = ' <span style="background:rgba(78,201,176,0.18); color:var(--accent-green); font-size:10px; font-weight:600; padding:1px 6px; border-radius:3px; letter-spacing:0.03em;">BEST</span>';
+    else if (worst && mo === worst) pill = ' <span style="background:rgba(239,68,68,0.16); color:var(--accent-red); font-size:10px; font-weight:600; padding:1px 6px; border-radius:3px; letter-spacing:0.03em;">WEAKEST</span>';
+    if (mo.current) pill += ' <span style="color:var(--text-muted); font-size:10px;">MTD</span>';
+    else if (mo.yearAgo) pill += ' <span style="color:var(--text-muted); font-size:10px;">YEAR AGO</span>';
+
+    var rowStyle = '';
+    if (best && mo === best) rowStyle = ' style="box-shadow:inset 3px 0 0 var(--accent-green);"';
+    else if (worst && mo === worst) rowStyle = ' style="box-shadow:inset 3px 0 0 var(--accent-red);"';
+    else if (mo.current) rowStyle = ' style="background:rgba(255,255,255,0.02);"';
+
+    html += '<tr' + rowStyle + '>' +
+      '<td style="padding-left:12px; font-weight:500; white-space:nowrap;">' + mo.label + pill + '</td>' +
+      '<td style="text-align:right; font-weight:600;">' + mo.apps.toLocaleString() + '</td>' +
+      '<td style="text-align:right; color:var(--accent-green); ' + divider + '">' + mo.hq + '</td>' +
+      '<td style="text-align:right; color:var(--accent-blue);">' + mo.lq + '</td>' +
+      '<td style="text-align:right; color:var(--accent-red);">' + mo.dq + '</td>' +
+      '<td style="text-align:right; color:var(--text-secondary);">' + mo.partial + '</td>' +
+      '<td style="text-align:right; color:var(--text-muted);">' + mo.untagged + '</td>' +
+      '<td style="text-align:right; color:var(--accent-green); ' + divider + '">' + pct1(mo.hqRate) + '</td>' +
+      '<td style="text-align:right; font-weight:600; ' + qualWash(mo) + '">' + pct1(mo.qual) + '</td>' +
+      '<td style="text-align:right; color:var(--accent-red);">' + pct1(mo.dqRate) + '</td>' +
+      '</tr>';
+  });
+
+  function rate(n) { return tot.apps > 0 ? (n / tot.apps * 100).toFixed(1) + '%' : '\u2014'; }
+  html += '<tr style="border-top:1px solid var(--border-color); font-weight:600;">' +
+    '<td style="padding-left:12px;">All ' + rows.length + ' months</td>' +
+    '<td style="text-align:right;">' + tot.apps.toLocaleString() + '</td>' +
+    '<td style="text-align:right; color:var(--accent-green); ' + divider + '">' + tot.hq + '</td>' +
+    '<td style="text-align:right; color:var(--accent-blue);">' + tot.lq + '</td>' +
+    '<td style="text-align:right; color:var(--accent-red);">' + tot.dq + '</td>' +
+    '<td style="text-align:right; color:var(--text-secondary);">' + tot.partial + '</td>' +
+    '<td style="text-align:right; color:var(--text-muted);">' + tot.untagged + '</td>' +
+    '<td style="text-align:right; color:var(--accent-green); ' + divider + '">' + rate(tot.hq) + '</td>' +
+    '<td style="text-align:right;">' + rate(tot.hq + tot.lq) + '</td>' +
+    '<td style="text-align:right; color:var(--accent-red);">' + rate(tot.dq) + '</td>' +
+    '</tr></tbody></table>';
+
+  host.innerHTML = html;
+}
+// END app-quality-12m
 
 function renderBuyerInsights(salesByEmailFiltered) {
   if (!appData || !salesData) { document.getElementById('aoInsightsTable').innerHTML = ''; return; }
