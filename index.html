@@ -1701,7 +1701,7 @@
           <div id="aoQualitySummary"></div>
           <div id="aoQualityTable"></div>
           <div style="color:var(--text-muted); font-size:11px; margin-top:12px; line-height:1.6;">
-            Apps counts every row in App_Log for that month. HQ is Result Tag "HQ Book A Call", LQ is "LQ Book A Call", DQ is "DQ", Partial is someone who started an application and never finished it, Untagged is a row nobody has tagged yet. HQ %, Qual % and DQ % are all measured against Apps, so Qual % is HQ plus LQ over every application that came in. Best and weakest are ranked on Qual %. The current month is still filling, is marked MTD, and stays out of that ranking.
+            <strong>Partial submits are taken out before anything is counted</strong>, so Apps is the real number of applications that came in that month and every percentage is measured against it. HQ is Result Tag "HQ Book A Call", LQ is "LQ Book A Call", DQ is "DQ", and Untagged is a finished application nobody has tagged yet, which stays in because dropping it would flatter every rate. HQ, LQ, DQ and Untagged add up to Apps. Best and weakest are ranked on Qual %. The current month is still filling, is marked MTD, and stays out of that ranking.
           </div>
         </div>
         <!-- END app-quality-12m -->
@@ -7012,6 +7012,13 @@ function aoQualityBuckets() {
     else mo.untagged++;
   });
   months.forEach(function (mo) {
+    // A partial submit is someone who started the form and never finished it.
+    // Nobody judged them, so they are neither qualified nor disqualified and
+    // they are taken out of the table completely. Apps is the real number of
+    // applications that came in, and every percentage is measured against it.
+    // Untagged stays IN: those are finished applications still awaiting a tag,
+    // and dropping them would flatter every rate.
+    mo.apps = mo.apps - mo.partial;
     mo.qual = mo.apps > 0 ? (mo.hq + mo.lq) / mo.apps * 100 : null;
     mo.hqRate = mo.apps > 0 ? mo.hq / mo.apps * 100 : null;
     mo.dqRate = mo.apps > 0 ? mo.dq / mo.apps * 100 : null;
@@ -7067,12 +7074,12 @@ function renderAoQuality() {
   var sum = document.getElementById('aoQualitySummary');
   if (sum) {
     var complete = months.filter(function (mo) { return !mo.current; });
-    var last3 = complete.slice(-3), l3apps = 0, l3qual = 0;
-    last3.forEach(function (mo) { l3apps += mo.apps; l3qual += mo.hq + mo.lq; });
-    var l3 = l3apps > 0 ? l3qual / l3apps * 100 : null;
-    var tApps = 0, tQual = 0;
-    months.forEach(function (mo) { tApps += mo.apps; tQual += mo.hq + mo.lq; });
-    var tAll = tApps > 0 ? tQual / tApps * 100 : null;
+    var last3 = complete.slice(-3), l3done = 0, l3qual = 0;
+    last3.forEach(function (mo) { l3done += mo.apps; l3qual += mo.hq + mo.lq; });
+    var l3 = l3done > 0 ? l3qual / l3done * 100 : null;
+    var tDone = 0, tQual = 0;
+    months.forEach(function (mo) { tDone += mo.apps; tQual += mo.hq + mo.lq; });
+    var tAll = tDone > 0 ? tQual / tDone * 100 : null;
 
     var cur = months[months.length - 1], ago = months[0];
 
@@ -7107,7 +7114,6 @@ function renderAoQuality() {
     hq: function (mo) { return mo.hq; },
     lq: function (mo) { return mo.lq; },
     dq: function (mo) { return mo.dq; },
-    partial: function (mo) { return mo.partial; },
     untagged: function (mo) { return mo.untagged; },
     hqRate: function (mo) { return mo.hqRate; },
     qual: function (mo) { return mo.qual; },
@@ -7138,7 +7144,6 @@ function renderAoQuality() {
     th('hq', 'HQ', 'text-align:right; ' + divider) +
     th('lq', 'LQ', 'text-align:right;') +
     th('dq', 'DQ', 'text-align:right;') +
-    th('partial', 'Partial', 'text-align:right;') +
     th('untagged', 'Untagged', 'text-align:right;') +
     th('hqRate', 'HQ %', 'text-align:right; ' + divider) +
     th('qual', 'Qual %', 'text-align:right;') +
@@ -7166,7 +7171,6 @@ function renderAoQuality() {
       '<td style="text-align:right; color:var(--accent-green); ' + divider + '">' + mo.hq + '</td>' +
       '<td style="text-align:right; color:var(--accent-blue);">' + mo.lq + '</td>' +
       '<td style="text-align:right; color:var(--accent-red);">' + mo.dq + '</td>' +
-      '<td style="text-align:right; color:var(--text-secondary);">' + mo.partial + '</td>' +
       '<td style="text-align:right; color:var(--text-muted);">' + mo.untagged + '</td>' +
       '<td style="text-align:right; color:var(--accent-green); ' + divider + '">' + pct1(mo.hqRate) + '</td>' +
       '<td style="text-align:right; font-weight:600; ' + qualWash(mo) + '">' + pct1(mo.qual) + '</td>' +
@@ -7181,12 +7185,21 @@ function renderAoQuality() {
     '<td style="text-align:right; color:var(--accent-green); ' + divider + '">' + tot.hq + '</td>' +
     '<td style="text-align:right; color:var(--accent-blue);">' + tot.lq + '</td>' +
     '<td style="text-align:right; color:var(--accent-red);">' + tot.dq + '</td>' +
-    '<td style="text-align:right; color:var(--text-secondary);">' + tot.partial + '</td>' +
     '<td style="text-align:right; color:var(--text-muted);">' + tot.untagged + '</td>' +
     '<td style="text-align:right; color:var(--accent-green); ' + divider + '">' + rate(tot.hq) + '</td>' +
     '<td style="text-align:right;">' + rate(tot.hq + tot.lq) + '</td>' +
     '<td style="text-align:right; color:var(--accent-red);">' + rate(tot.dq) + '</td>' +
     '</tr></tbody></table>';
+
+  // Partials are gone from the numbers above, so say once how many there were.
+  var curMo = months[months.length - 1];
+  if (tot.partial > 0) {
+    html += '<div style="color:var(--text-muted); font-size:11px; margin-top:8px;">' +
+      tot.partial + ' partial submit' + (tot.partial === 1 ? '' : 's') +
+      ' left out of this table' +
+      (curMo && curMo.partial ? ', ' + curMo.partial + ' of them in ' + curMo.label : '') +
+      '. Nobody judged them, so they count as neither qualified nor disqualified.</div>';
+  }
 
   host.innerHTML = html;
 }
